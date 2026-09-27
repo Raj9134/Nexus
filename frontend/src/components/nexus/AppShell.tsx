@@ -29,6 +29,7 @@ import {
 import { useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Attachments } from "@/components/nexus/Attachments";
 import { useNexus } from "@/context/NexusContext";
 import { useCall } from "@/context/CallContext";
 import { cn } from "@/lib/utils";
@@ -826,6 +827,10 @@ function TaskDetailDrawer() {
               </label>
             ))}
           </div>
+        </div>
+        <div>
+          <h4 className="mb-2 text-sm font-semibold text-foreground">Attachments</h4>
+          <Attachments target={{ taskId: task.id }} label="this task" />
         </div>
         <div>
           <h4 className="mb-2 text-sm font-semibold text-foreground">Comments</h4>

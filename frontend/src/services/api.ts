@@ -650,6 +650,19 @@ export const api = {
       return one<MessageItem>(payload, "data", payload as MessageItem);
     },
 
+    /**
+     * Direct message. The backend stamps these with a `direct:<userId>`
+     * channel, which is how a thread is told apart from a real channel.
+     */
+    async sendDirect(receiverId: string, body: string): Promise<MessageItem> {
+      const payload = await request<unknown>("/messages", {
+        method: "POST",
+        body: { receiver: receiverId, message: body },
+      });
+
+      return one<MessageItem>(payload, "data", payload as MessageItem);
+    },
+
     async update(id: string, body: string): Promise<MessageItem> {
       const payload = await request<unknown>(`/messages/${id}`, {
         method: "PATCH",

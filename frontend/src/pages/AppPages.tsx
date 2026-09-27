@@ -34,8 +34,10 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNexus } from "@/context/NexusContext";
 import { cn } from "@/lib/utils";
-import type { Project, Task, TaskStatus } from "@/types/nexus";
+import type { Project, Task, TaskStatus, User } from "@/types/nexus";
 import { AppShell } from "@/components/nexus/AppShell";
+import { DirectThread } from "@/components/nexus/DirectThread";
+import { Attachments } from "@/components/nexus/Attachments";
 import {
   Avatar,
   Badge,
@@ -732,7 +734,14 @@ export function ProjectDetailPage() {
           <TaskTable tasks={projectTasks.length ? projectTasks : nexus.tasks} />
         ) : null}
         {tab === "Timeline" ? <Timeline /> : null}
-        {tab === "Files" ? <FilesGrid embedded /> : null}
+        {tab === "Files" ? (
+          <div className="space-y-4">
+            <Card>
+              <Attachments target={{ projectId: project.id }} label="this project" />
+            </Card>
+            <FilesGrid embedded />
+          </div>
+        ) : null}
         {tab === "Chat" ? <MessagesPanel embedded channel="backend" /> : null}
         {tab === "Analytics" ? (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -928,6 +937,7 @@ function MessagesPanel({
 }) {
   const nexus = useNexus();
   const [active, setActive] = useState(channel);
+  const [peer, setPeer] = useState<User | null>(null);
   const [draft, setDraft] = useState("");
   const channelMessages = nexus.messages.filter((message) => message.channel === active);
   return (
@@ -952,78 +962,89 @@ function MessagesPanel({
         <h3 className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           Direct messages
         </h3>
-        {nexus.users.slice(1, 4).map((user) => (
-          <button
-            key={user.id}
-            onClick={() => nexus.openUser(user)}
-            className="mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted"
-          >
-            <Avatar name={user.name} className="h-7 w-7" />
-            {user.name.split(" ")[0]}
-          </button>
-        ))}
+        {nexus.users
+          .filter((user) => user.id !== nexus.currentUser.id)
+          .slice(0, 5)
+          .map((user) => (
+            <button
+              key={user.id}
+              onClick={() => setPeer(user)}
+              className={cn(
+                "mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted",
+                peer?.id === user.id && "bg-primary/10 text-primary",
+              )}
+            >
+              <Avatar name={user.name} className="h-7 w-7" />
+              <span className="min-w-0 flex-1 truncate text-left">{user.name.split(" ")[0]}</span>
+              <StatusDot status={user.status} />
+            </button>
+          ))}
       </Card>
-      <Card className="min-h-[650px] p-0">
-        <div className="border-b border-border p-4">
-          <h1 className="font-display text-xl font-semibold">#{active}</h1>
-          <p className="text-sm text-muted-foreground">36 members · 12 online</p>
-        </div>
-        <div className="nexus-scrollbar max-h-[460px] space-y-4 overflow-auto p-4">
-          {channelMessages.map((message) => {
-            const author = nexus.users.find((user) => user.id === message.authorId);
-            return (
-              <div key={message.id} className="group flex gap-3">
-                <Avatar name={author?.name ?? "User"} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-foreground">{author?.name}</span>
-                    <span className="text-xs text-muted-foreground">{message.time}</span>
-                  </div>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{message.body}</p>
-                  <div className="mt-2 flex flex-wrap gap-2 opacity-80 group-hover:opacity-100">
-                    {["Reply", "React", "Edit", "Delete", "Copy", "Mention"].map((action) => (
-                      <button
-                        key={action}
-                        onClick={() => nexus.pushToast(`${action} action ready`, "info")}
-                        className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {action}
-                      </button>
-                    ))}
+      {peer ? (
+        <DirectThread peer={peer} />
+      ) : (
+        <Card className="min-h-[650px] p-0">
+          <div className="border-b border-border p-4">
+            <h1 className="font-display text-xl font-semibold">#{active}</h1>
+            <p className="text-sm text-muted-foreground">36 members · 12 online</p>
+          </div>
+          <div className="nexus-scrollbar max-h-[460px] space-y-4 overflow-auto p-4">
+            {channelMessages.map((message) => {
+              const author = nexus.users.find((user) => user.id === message.authorId);
+              return (
+                <div key={message.id} className="group flex gap-3">
+                  <Avatar name={author?.name ?? "User"} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-medium text-foreground">{author?.name}</span>
+                      <span className="text-xs text-muted-foreground">{message.time}</span>
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{message.body}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 opacity-80 group-hover:opacity-100">
+                      {["Reply", "React", "Edit", "Delete", "Copy", "Mention"].map((action) => (
+                        <button
+                          key={action}
+                          onClick={() => nexus.pushToast(`${action} action ready`, "info")}
+                          className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          {action}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-          <p className="text-sm text-primary">Raj is typing...</p>
-        </div>
-        <div className="border-t border-border p-4">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2">
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => nexus.pushToast("Attachment picker opened", "info")}
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={`Message #${active}...`}
-              className="h-10 rounded-md border border-input bg-secondary/70 px-3 text-sm outline-none focus:border-primary"
-            />
-            <Button
-              onClick={() => {
-                nexus.addMessage(active, draft);
-                setDraft("");
-              }}
-            >
-              <Send className="h-4 w-4" />
-              Send
-            </Button>
+              );
+            })}
+            <p className="text-sm text-primary">Raj is typing...</p>
           </div>
-        </div>
-      </Card>
+          <div className="border-t border-border p-4">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2">
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={() => nexus.pushToast("Attachment picker opened", "info")}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={`Message #${active}...`}
+                className="h-10 rounded-md border border-input bg-secondary/70 px-3 text-sm outline-none focus:border-primary"
+              />
+              <Button
+                onClick={() => {
+                  nexus.addMessage(active, draft);
+                  setDraft("");
+                }}
+              >
+                <Send className="h-4 w-4" />
+                Send
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
       {!embedded ? (
         <Card>
           <h2 className="font-display text-lg font-semibold">Online users</h2>
