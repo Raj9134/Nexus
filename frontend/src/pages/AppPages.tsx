@@ -863,8 +863,8 @@ export function TeamsPage() {
     <AppShell title="Teams">
       <div className="space-y-5">
         <SectionHeader
-          title="Engineering"
-          description="36 members · Team lead: Raj Kumar Mishra"
+          title={nexus.organization || "Workspace"}
+          description={`${nexus.users.length} ${nexus.users.length === 1 ? "member" : "members"} · ${nexus.users.filter((user) => user.status === "Online").length} online`}
           actions={
             <Button onClick={() => nexus.openModal("invite")}>
               <Plus className="h-4 w-4" />
