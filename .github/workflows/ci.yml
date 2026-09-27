@@ -82,9 +82,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned, not `latest`. bun rewrites bun.lock as its resolver changes, so
+      # an unpinned version makes --frozen-lockfile fail intermittently.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
       - uses: actions/setup-node@v4
         with:

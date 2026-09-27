@@ -11,11 +11,30 @@ messages, files, calendar, and voice calling, on a realtime backend.
 - Node.js 22
 - MongoDB. Either a local instance or an Atlas cluster. The backend reads
   `MONGO_URI` from `backend/.env`.
-- bun, for the frontend. It ships a `bun.lock` and a `bunfig.toml` with a
-  24-hour `minimumReleaseAge` supply-chain guard, so `npm install` in
-  `frontend/` will resolve versions independently of the lockfile and can
-  drift. Use bun for anything beyond running the already-installed
-  `node_modules`.
+- bun 1.4.2, for the frontend. It ships a `bun.lock` and a `bunfig.toml` with
+  a 24-hour `minimumReleaseAge` supply-chain guard, so `npm install` in
+  `frontend/` resolves versions independently of the lockfile and can drift.
+  Keep the bun version pinned to match the lockfile: `bun install
+  --frozen-lockfile` fails if the resolver wants to rewrite it.
+
+## Local database
+
+`MONGO_URI` in `backend/.env` currently points at an Atlas cluster. Atlas
+resolves its hosts through a DNS SRV lookup, and on this machine that lookup
+intermittently fails (`querySrv ETIMEOUT`, `getaddrinfo ENOTFOUND ...shard-00-02`).
+The backend now retries at startup, but a lookup that fails mid-request still
+surfaces as a 500.
+
+A local MongoDB service is already running on port 27017. To use it instead,
+edit the one line in `backend/.env`:
+
+```
+MONGO_URI=mongodb://127.0.0.1:27017/NEXUS
+```
+
+That is a separate, empty database, so existing accounts and workspaces will
+not appear.
+
 
 ## Getting started
 
@@ -28,8 +47,8 @@ npm run dev               # nodemon
 
 # App on :3000
 cd frontend
-bun install
-npm run dev -- --port 3000
+bun install --frozen-lockfile
+bun run dev -- --port 3000
 ```
 
 The app is then on http://localhost:3000 and the API on http://localhost:5000.
