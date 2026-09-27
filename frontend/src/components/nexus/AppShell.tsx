@@ -247,7 +247,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
             </Link>
             <button
               type="button"
-              onClick={() => nexus.pushToast("Support team has been notified", "info")}
+              onClick={() => nexus.openModal("support")}
               className={cn(
                 "grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground",
                 nexus.sidebarCollapsed && "grid-cols-1 justify-items-center px-2",
@@ -583,6 +583,11 @@ function GlobalModals() {
   const [inviteEmails, setInviteEmails] = useState("");
   const [inviteOrgId, setInviteOrgId] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
+  // "Help & Support" used to show a "Support team has been notified" toast and
+  // send nothing, so the message went nowhere. These are a real form.
+  const [supportSubject, setSupportSubject] = useState("");
+  const [supportMessage, setSupportMessage] = useState("");
+  const [supportError, setSupportError] = useState<string | null>(null);
   const type = nexus.modal.type;
   const titles: Record<Exclude<ModalState["type"], null>, string> = {
     task: "Create Task",
@@ -594,6 +599,7 @@ function GlobalModals() {
     delete: "Delete project?",
     role: "Change Role",
     profile: "Edit Profile",
+    support: "Contact support",
   };
 
   const inviteEmails_ = useMemo(
@@ -661,9 +667,48 @@ function GlobalModals() {
     }
   };
 
+  const sendSupportRequest = async () => {
+    if (!supportSubject.trim()) {
+      setSupportError("Add a subject.");
+      return;
+    }
+
+    if (!supportMessage.trim()) {
+      setSupportError("Describe what happened.");
+      return;
+    }
+
+    setLoading(true);
+    setSupportError(null);
+
+    try {
+      /*
+        The route travels with the request, so a report about a broken screen
+        says which screen. Nothing is emailed: the record is stored and can be
+        read back, which is what the old toast-only button failed to do.
+      */
+      await api.support.send({
+        subject: supportSubject.trim(),
+        message: supportMessage.trim(),
+        page: window.location.pathname,
+        ...(nexus.organizationId ? { organization: nexus.organizationId } : {}),
+      });
+
+      nexus.closeModal();
+      setSupportSubject("");
+      setSupportMessage("");
+      nexus.pushToast("Support request recorded", "success");
+    } catch (error) {
+      setSupportError(error instanceof Error ? error.message : "We could not record your request.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!type) return null;
   const destructive = type === "delete";
   const isInvite = type === "invite";
+  const isSupport = type === "support";
   return (
     <Modal
       open
@@ -673,7 +718,9 @@ function GlobalModals() {
           ? "This action cannot be undone."
           : isInvite
             ? "Send an invitation link. It works for both new and existing accounts."
-            : "Complete the required fields to continue."
+            : isSupport
+              ? `Tell us what happened. This is stored on ${window.location.pathname}.`
+              : "Complete the required fields to continue."
       }
       onClose={nexus.closeModal}
       footer={
@@ -681,9 +728,12 @@ function GlobalModals() {
           <Button variant="outline" onClick={nexus.closeModal}>
             Cancel
           </Button>
-          {isInvite ? (
-            <SubmitButton loading={loading} onClick={() => void sendInvites()}>
-              Send invitations
+          {isInvite || isSupport ? (
+            <SubmitButton
+              loading={loading}
+              onClick={() => void (isInvite ? sendInvites() : sendSupportRequest())}
+            >
+              {isInvite ? "Send invitations" : "Send request"}
             </SubmitButton>
           ) : (
             <SubmitButton
@@ -734,6 +784,34 @@ function GlobalModals() {
           {inviteError ? (
             <p role="alert" className="text-xs text-destructive">
               {inviteError}
+            </p>
+          ) : null}
+        </div>
+      ) : isSupport ? (
+        <div className="grid gap-4">
+          <label className="text-sm font-medium text-foreground">
+            Subject
+            <input
+              value={supportSubject}
+              onChange={(event) => setSupportSubject(event.target.value)}
+              maxLength={200}
+              placeholder="Voice messages will not send"
+              className="mt-2 h-10 w-full rounded-md border border-input bg-secondary/70 px-3 text-sm outline-none focus:border-primary"
+            />
+          </label>
+          <label className="text-sm font-medium text-foreground">
+            What happened
+            <textarea
+              value={supportMessage}
+              onChange={(event) => setSupportMessage(event.target.value)}
+              maxLength={5000}
+              placeholder="What you did, what you expected, and what you saw instead."
+              className="mt-2 min-h-28 w-full rounded-md border border-input bg-secondary/70 p-3 text-sm outline-none focus:border-primary"
+            />
+          </label>
+          {supportError ? (
+            <p role="alert" className="text-xs text-destructive">
+              {supportError}
             </p>
           ) : null}
         </div>

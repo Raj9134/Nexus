@@ -275,8 +275,22 @@ function serializeNotification(notification) {
     };
 }
 
-function serializeChannel(channel) {
-    if (!channel) {
+function serializeSupportRequest(request) {
+    if (!request) {
+        return null;
+    }
+
+    return {
+        id: idOf(request),
+        subject: request.subject || "",
+        message: request.message || "",
+        page: request.page || "",
+        status: request.status || "open",
+        createdAt: request.createdAt || null
+    };
+}
+
+function serializeChannel(channel) {    if (!channel) {
         return null;
     }
 
@@ -342,6 +356,7 @@ module.exports = {
     serializeAuditLog,
     serializeActivity,
     serializeNotification,
+    serializeSupportRequest,
     serializeChannel,
     serializeCall
 };

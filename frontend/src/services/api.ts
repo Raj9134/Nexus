@@ -10,6 +10,7 @@ import type {
   Organization,
   Project,
   ProjectStatus,
+  SupportRequest,
   Task,
   TaskStatus,
   User,
@@ -958,6 +959,31 @@ export const api = {
       const payload = await request<unknown>("/team");
 
       return unwrap<User[]>(payload, "users", []);
+    },
+  },
+
+  support: {
+    /** Records a request the caller can read back through `mine`. */
+    async send(input: { subject: string; message: string; page?: string; organization?: string }) {
+      const payload = await request<unknown>("/support", {
+        method: "POST",
+        body: input,
+      });
+
+      return one<SupportRequest>(payload, "request", {
+        id: "",
+        subject: input.subject,
+        message: input.message,
+        page: input.page ?? "",
+        status: "open",
+        createdAt: null,
+      });
+    },
+
+    async mine(): Promise<SupportRequest[]> {
+      const payload = await request<unknown>("/support/mine");
+
+      return unwrap<SupportRequest[]>(payload, "requests", []);
     },
   },
 

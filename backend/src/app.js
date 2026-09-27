@@ -19,6 +19,7 @@ const auditRoutes = require("./routes/auditRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const teamRoutes = require("./routes/teamRoutes");
 const onboardingRoutes = require("./routes/onboardingRoutes");
+const supportRoutes = require("./routes/supportRoutes");
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use("/api/audit-logs", auditRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/team", teamRoutes);
 app.use("/api/onboarding", onboardingRoutes);
+app.use("/api/support", supportRoutes);
 
 
 app.get("/", (req, res) => {

@@ -130,6 +130,17 @@ export interface AuditLog {
   detail: string;
 }
 
+/** A support request the signed-in user raised. */
+export interface SupportRequest {
+  id: string;
+  subject: string;
+  message: string;
+  /** The route the user was on, so a report carries where it happened. */
+  page: string;
+  status: "open" | "closed";
+  createdAt: string | null;
+}
+
 export interface Analytics {
   progress: { name: string; planned: number; completed: number }[];
   status: { name: TaskStatus; value: number }[];
@@ -163,6 +174,7 @@ export interface ModalState {
     | "delete"
     | "role"
     | "profile"
+    | "support"
     | null;
   payload?: unknown;
 }

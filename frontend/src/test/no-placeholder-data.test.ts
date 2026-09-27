@@ -149,3 +149,27 @@ describe("the signed-in user", () => {
     expect(shell).not.toMatch(/Backend Developer/);
   });
 });
+
+describe("controls that claim to have done something", () => {
+  /*
+    "Help & Support" showed a "Support team has been notified" toast and sent
+    nothing, so the message was never recorded anywhere. A toast that claims an
+    outcome is the same bug class as a hardcoded number: the UI reports success
+    while no work happened.
+  */
+  const shell = read(join(SRC, "components", "nexus", "AppShell.tsx"));
+
+  it("has no toast asserting an action was taken on the user's behalf", () => {
+    const claims = shell.match(/pushToast\("[^"]*(has been|notified|sent to|we have)[^"]*"/gi);
+
+    expect(
+      claims,
+      `Toast claims an action happened with no request behind it: ${claims?.join(", ") ?? ""}`,
+    ).toBeNull();
+  });
+
+  it("sends the support form to the API", () => {
+    expect(shell).toContain("api.support.send(");
+    expect(shell).toContain('openModal("support")');
+  });
+});

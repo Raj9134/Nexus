@@ -3,7 +3,7 @@
 An enterprise collaboration platform: projects, tasks, channels, direct
 messages, files, calendar, and voice calling, on a realtime backend.
 
-- `backend/` — Express 5 + Mongoose + Socket.IO. 76 endpoints.
+- `backend/` — Express 5 + Mongoose + Socket.IO. 78 endpoints.
 - `frontend/` — TanStack Start + React 19 + TypeScript + Tailwind 4.
 
 ## Requirements
@@ -87,7 +87,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-55 tests across six files. They focus on the failures that a type check
+63 tests across six files. They focus on the failures that a type check
 cannot catch, because those were the ones that reached a browser:
 
 - `nexus-context.test.tsx` — hydration must never present the seed dataset as
@@ -98,7 +98,9 @@ cannot catch, because those were the ones that reached a browser:
   a failed read rather than an empty result.
 - `no-placeholder-data.test.ts` — scans the sources for text and expressions
   that stand in for state, e.g. a permanent "Raj is typing..." or a count
-  hardcoded as `item === "backend" ? 3 : 1`.
+  hardcoded as `item === "backend" ? 3 : 1`. It also covers the workspace
+  switcher, the signed-in user's name and role, and any toast that claims an
+  action happened with no request behind it.
 - `call-context.test.tsx` — the signalling payloads. `server.js` validates them
   with `readText`, which rejects anything that is not a string, so sending
   WebRTC objects instead of raw SDP is what previously made every call fail
@@ -146,6 +148,16 @@ without a mail server.
 
 The workspace switcher is hidden when a user has only one workspace, since a
 menu with a single entry cannot do anything.
+
+## Support requests
+
+"Help & Support" in the sidebar opens a form that records the request through
+`POST /api/support`, along with the route the user was on. `GET
+/api/support/mine` returns the caller's own requests, newest first, and nothing
+belongs to another user. Nothing is emailed: the backend has no mail transport
+by default, so a request that was only ever mailed would be lost silently. The
+control previously showed a "Support team has been notified" toast and sent
+nothing at all.
 
 ## Layout notes
 

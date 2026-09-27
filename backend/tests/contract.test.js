@@ -622,6 +622,38 @@ values("MessageItem values (search)", searchMessagesRes.data.messages[0], ["id",
     check("call rejected", (await call("PUT", `/calls/${rejectedCall.data.call.id}/reject`, mateToken)).status, 200);
     check("a rejected call cannot be accepted", (await call("PUT", `/calls/${rejectedCall.data.call.id}/accept`, mateToken)).status, 400);
 
+    /*
+      Support requests. The sidebar's "Help & Support" control used to show a
+      "Support team has been notified" toast and send nothing, so these assert
+      that a request is actually stored and can be read back by its author only.
+    */
+    const SUPPORT = ["id", "subject", "message", "page", "status", "createdAt"];
+
+    check("support request needs a subject", (await call("POST", "/support", token, { message: "hi" })).status, 400);
+    check("support request needs a message", (await call("POST", "/support", token, { subject: "hi" })).status, 400);
+    check("support request is refused when signed out", (await call("POST", "/support", null, { subject: "hi", message: "there" })).status, 401);
+
+    const sentSupport = await call("POST", "/support", token, {
+      subject: "Voice notes will not send",
+      message: "Recording stops but nothing arrives.",
+      page: "/messages"
+    });
+    check("support request is accepted", sentSupport.status, 201);
+    shape("SupportRequest contract", sentSupport.data.request, SUPPORT);
+    check("support request never leaks _id", JSON.stringify(sentSupport.data).includes("_id"), false);
+    check("the stored page is kept", sentSupport.data.request.page, "/messages");
+
+    const myRequests = await call("GET", "/support/mine", token);
+    check("support history", myRequests.status, 200);
+    check("history includes the new request", myRequests.data.requests.some((r) => r.id === sentSupport.data.request.id), true);
+    check("support history never leaks _id", JSON.stringify(myRequests.data).includes("_id"), false);
+
+    await call("POST", "/support", mateToken, { subject: "Theirs", message: "Not mine." });
+    const outsiderHistory = await call("GET", "/support/mine", outsiderToken);
+    check("support history is per user", outsiderHistory.data.requests.length, 0);
+    check("another user cannot read a request", outsiderHistory.data.requests.some((r) => r.id === sentSupport.data.request.id), false);
+    check("support history is refused when signed out", (await call("GET", "/support/mine", null)).status, 401);
+
     report();
 })().catch((error) => {
     console.error("TEST CRASHED:", error && error.stack ? error.stack : error);
