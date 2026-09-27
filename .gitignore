@@ -39,3 +39,6 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Local copy of the Atlas connection, kept for switching back
+backend/.env.atlas-backup

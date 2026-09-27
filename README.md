@@ -17,23 +17,30 @@ messages, files, calendar, and voice calling, on a realtime backend.
   Keep the bun version pinned to match the lockfile: `bun install
   --frozen-lockfile` fails if the resolver wants to rewrite it.
 
-## Local database
+## Database
 
-`MONGO_URI` in `backend/.env` currently points at an Atlas cluster. Atlas
+`MONGO_URI` in `backend/.env` points at the local MongoDB service on port
+27017. Keep it that way for development.
+
+The Atlas connection that was configured earlier had a real problem: it
 resolves its hosts through a DNS SRV lookup, and on this machine that lookup
-intermittently fails (`querySrv ETIMEOUT`, `getaddrinfo ENOTFOUND ...shard-00-02`).
-The backend now retries at startup, but a lookup that fails mid-request still
-surfaces as a 500.
+failed every few minutes (`querySrv ETIMEOUT`, `getaddrinfo ENOTFOUND
+...shard-00-02`). The backend retries at startup, but a lookup that fails
+mid-request still surfaces as a 500, and it was the cause of a bug where one
+unreachable endpoint made the whole dashboard fall back to placeholder data.
 
-A local MongoDB service is already running on port 27017. To use it instead,
-edit the one line in `backend/.env`:
+The Atlas connection is preserved in `backend/.env.atlas-backup` if you need
+it. The accounts that were worth keeping have been copied across.
 
+To reset a password on a local account:
+
+```sh
+cd backend
+node set-local-password.cjs you@example.com "new-password"
 ```
-MONGO_URI=mongodb://127.0.0.1:27017/NEXUS
-```
 
-That is a separate, empty database, so existing accounts and workspaces will
-not appear.
+That script refuses to run against a remote host.
+
 
 
 ## Getting started
