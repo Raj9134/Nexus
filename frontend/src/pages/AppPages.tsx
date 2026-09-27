@@ -1,7 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import {
   Archive,
-  ArrowDownUp,
   BarChart3,
   Bell,
   CalendarDays,
@@ -13,6 +12,7 @@ import {
   FolderKanban,
   KanbanSquare,
   ListFilter,
+  Loader2,
   LockKeyhole,
   MessageSquare,
   MoreHorizontal,
@@ -29,7 +29,7 @@ import {
   Workflow,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useNexus } from "@/context/NexusContext";
@@ -54,6 +54,7 @@ import {
   StatusDot,
   Tabs,
 } from "@/components/nexus/primitives";
+import { api, isAuthenticated } from "@/services/api";
 
 const statusOrder: TaskStatus[] = ["Backlog", "Todo", "In Progress", "In Review", "Done"];
 
@@ -941,10 +942,41 @@ function MessagesPanel({
   const [active, setActive] = useState(channel);
   const [peer, setPeer] = useState<User | null>(null);
   const [draft, setDraft] = useState("");
+  const [sendingFile, setSendingFile] = useState(false);
+  const channelFileRef = useRef<HTMLInputElement>(null);
+  const live = nexus.isDemo === false && isAuthenticated();
   const channelMessages = nexus.messages.filter((message) => message.channel === active);
   const messagesIn = (name: string) =>
     nexus.messages.filter((message) => message.channel === name).length;
   const onlineCount = nexus.users.filter((user) => user.status === "Online").length;
+
+  /*
+    The paperclip used to show an "Attachment picker opened" toast and send
+    nothing, so a file could not be posted to a channel at all. The backend had
+    no route for it: the Message model allowed messageType "file" and
+    serializeMessage exposed fileId, but nothing ever created one.
+  */
+  const sendChannelFile = async (file: File) => {
+    setSendingFile(true);
+
+    try {
+      const { message } = await api.files.sendToChannel(file, active, draft);
+
+      // The socket also broadcasts this, but the sender's own socket room may
+      // not echo, so append locally and let reload reconcile.
+      nexus.addMessage(active, draft.trim() || message.body);
+      setDraft("");
+      nexus.pushToast(`${file.name} sent to #${active}`, "success");
+    } catch (error) {
+      nexus.pushToast(
+        error instanceof Error ? error.message : `Could not send ${file.name}`,
+        "error",
+      );
+    } finally {
+      setSendingFile(false);
+    }
+  };
+
   return (
     <div className={cn("grid gap-4", !embedded && "lg:grid-cols-[280px_minmax(0,1fr)_240px]")}>
       <Card className={cn(embedded && "hidden")}>
@@ -1045,12 +1077,32 @@ function MessagesPanel({
           </div>
           <div className="border-t border-border p-4">
             <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2">
+              <input
+                ref={channelFileRef}
+                type="file"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+
+                  event.target.value = "";
+
+                  if (file) {
+                    void sendChannelFile(file);
+                  }
+                }}
+              />
               <Button
                 variant="secondary"
                 size="icon"
-                onClick={() => nexus.pushToast("Attachment picker opened", "info")}
+                aria-label={`Attach a file to #${active}`}
+                disabled={!live || sendingFile}
+                onClick={() => channelFileRef.current?.click()}
               >
-                <Paperclip className="h-4 w-4" />
+                {sendingFile ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4" />
+                )}
               </Button>
               <input
                 value={draft}
@@ -1151,9 +1203,44 @@ export function FilesPage() {
 function FilesGrid({ embedded = false }: { embedded?: boolean }) {
   const nexus = useNexus();
   const [query, setQuery] = useState("");
-  const filtered = nexus.files.filter(
-    (file) => !query || file.name.toLowerCase().includes(query.toLowerCase()),
-  );
+  const [folder, setFolder] = useState<string | null>(null);
+  const [sort, setSort] = useState<"name" | "size">("name");
+  const [kind, setKind] = useState<string>("all");
+
+  const kinds = useMemo(() => {
+    const present = new Set(nexus.files.map((file) => file.type));
+
+    return ["all", ...[...present].sort()];
+  }, [nexus.files]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
+    const matched = nexus.files.filter((file) => {
+      if (needle && !file.name.toLowerCase().includes(needle)) {
+        return false;
+      }
+
+      if (folder && file.folder !== folder) {
+        return false;
+      }
+
+      if (kind !== "all" && file.type !== kind) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return [...matched].sort((a, b) => {
+      if (sort === "size") {
+        return b.size.localeCompare(a.size, undefined, { numeric: true });
+      }
+
+      return a.name.localeCompare(b.name);
+    });
+  }, [folder, kind, nexus.files, query, sort]);
+
   return (
     <div className="space-y-5">
       {!embedded ? (
@@ -1166,10 +1253,6 @@ function FilesGrid({ embedded = false }: { embedded?: boolean }) {
                 <Upload className="h-4 w-4" />
                 Upload
               </Button>
-              <Button onClick={() => nexus.pushToast("Folder created", "success")}>
-                <Plus className="h-4 w-4" />
-                Create Folder
-              </Button>
             </>
           }
         />
@@ -1178,13 +1261,32 @@ function FilesGrid({ embedded = false }: { embedded?: boolean }) {
         <Card>
           <h2 className="font-display text-lg font-semibold">Folders</h2>
           <div className="mt-4 space-y-2">
-            {nexus.folders.map((folder) => (
+            {/*
+              Folders are derived from the files that exist, so there is no
+              "create folder" action: a folder is made by uploading a file into
+              it. This used to render a "Folder created" toast and store nothing.
+            */}
+            <button
+              onClick={() => setFolder(null)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm",
+                folder === null ? "bg-primary/10 text-primary" : "hover:bg-muted",
+              )}
+            >
+              <Archive className="h-4 w-4" />
+              All files
+            </button>
+            {nexus.folders.map((name) => (
               <button
-                key={folder}
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted"
+                key={name}
+                onClick={() => setFolder(name)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm",
+                  folder === name ? "bg-primary/10 text-primary" : "hover:bg-muted",
+                )}
               >
                 <Archive className="h-4 w-4 text-primary" />
-                {folder}
+                <span className="truncate">{name}</span>
               </button>
             ))}
           </div>
@@ -1192,14 +1294,20 @@ function FilesGrid({ embedded = false }: { embedded?: boolean }) {
         <Card className="p-0">
           <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-[1fr_auto_auto]">
             <SearchInput value={query} onChange={setQuery} placeholder="Search files" />
-            <Button variant="secondary" onClick={() => nexus.pushToast("Sort changed", "info")}>
-              <ArrowDownUp className="h-4 w-4" />
-              Sort
-            </Button>
-            <Button variant="secondary">
-              <ListFilter className="h-4 w-4" />
-              Filter
-            </Button>
+            <SelectField
+              label="Sort"
+              value={sort}
+              onChange={(next) => setSort(next as "name" | "size")}
+              options={["name", "size"]}
+              optionLabels={["Name", "Largest first"]}
+            />
+            <SelectField
+              label="Type"
+              value={kind}
+              onChange={setKind}
+              options={kinds}
+              optionLabels={kinds.map((value) => (value === "all" ? "All types" : value))}
+            />
           </div>
           <div className="divide-y divide-border">
             {filtered.map((file) => (

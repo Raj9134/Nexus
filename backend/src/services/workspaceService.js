@@ -182,6 +182,25 @@ const listUsers = async (user) => {
     });
 };
 
+/*
+    Owning a workspace is what makes someone an admin, so the label has to come
+    from the same place the permission checks read. GET /auth/me used to report
+    the stored User.role, which nothing has ever set, so the owner of a
+    workspace was "Member" on their own profile and "Organization Admin" in the
+    team list at the same moment.
+*/
+const serializeUserWithRole = async (user, stats) => {
+    const owns = await Organization.exists({ createdBy: idOf(user._id) });
+    const shaped = serializeUser(user, stats || {});
+
+    if (owns) {
+        shaped.role = "Organization Admin";
+    }
+
+    return shaped;
+};
+
+
 const listProjects = async (user, { status, search, organizationId } = {}) => {
     let projectIds = await accessibleProjectIds(user);
 
@@ -739,5 +758,6 @@ module.exports = {
     projectView,
     taskView,
     userStats,
+    serializeUserWithRole,
     uniqueIds
 };

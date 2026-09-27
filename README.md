@@ -3,7 +3,7 @@
 An enterprise collaboration platform: projects, tasks, channels, direct
 messages, files, calendar, and voice calling, on a realtime backend.
 
-- `backend/` — Express 5 + Mongoose + Socket.IO. 78 endpoints.
+- `backend/` — Express 5 + Mongoose + Socket.IO. 79 endpoints.
 - `frontend/` — TanStack Start + React 19 + TypeScript + Tailwind 4.
 
 ## Requirements
@@ -15,12 +15,11 @@ messages, files, calendar, and voice calling, on a realtime backend.
   a 24-hour `minimumReleaseAge` supply-chain guard, so `npm install` in
   `frontend/` resolves versions independently of the lockfile and can drift.
   Keep the bun version pinned to match the lockfile: `bun install
-  --frozen-lockfile` fails if the resolver wants to rewrite it.
+--frozen-lockfile` fails if the resolver wants to rewrite it.
 
 ## Database
 
-`MONGO_URI` in `backend/.env` points at the local MongoDB service on port
-27017. Keep it that way for development.
+`MONGO_URI` in `backend/.env` points at the local MongoDB service on port 27017. Keep it that way for development.
 
 The Atlas connection that was configured earlier had a real problem: it
 resolves its hosts through a DNS SRV lookup, and on this machine that lookup
@@ -40,8 +39,6 @@ node set-local-password.cjs you@example.com "new-password"
 ```
 
 That script refuses to run against a remote host.
-
-
 
 ## Getting started
 
@@ -87,7 +84,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-63 tests across six files. They focus on the failures that a type check
+70 tests across six files. They focus on the failures that a type check
 cannot catch, because those were the ones that reached a browser:
 
 - `nexus-context.test.tsx` — hydration must never present the seed dataset as
@@ -99,8 +96,8 @@ cannot catch, because those were the ones that reached a browser:
 - `no-placeholder-data.test.ts` — scans the sources for text and expressions
   that stand in for state, e.g. a permanent "Raj is typing..." or a count
   hardcoded as `item === "backend" ? 3 : 1`. It also covers the workspace
-  switcher, the signed-in user's name and role, and any toast that claims an
-  action happened with no request behind it.
+  switcher, the signed-in user's name and role, any toast that claims an action
+  happened with no request behind it, and every file-picking control.
 - `call-context.test.tsx` — the signalling payloads. `server.js` validates them
   with `readText`, which rejects anything that is not a string, so sending
   WebRTC objects instead of raw SDP is what previously made every call fail
@@ -121,6 +118,12 @@ There is no global super-admin role. An earlier `User.role` field was read as
 one in six places but never written, which made `GET /auth/users` answer 403
 for everyone and left five other permission checks dead; that field is no
 longer consulted for authorization.
+
+Because that field is never written, `GET /auth/me` used to report every user as
+"Member" while `GET /team` called the same owner "Organization Admin". Both now
+derive the label from workspace ownership through
+`serializeUserWithRole`, so a user's own profile and the team list cannot
+disagree.
 
 ## Realtime
 
@@ -148,6 +151,26 @@ without a mail server.
 
 The workspace switcher is hidden when a user has only one workspace, since a
 menu with a single entry cannot do anything.
+
+## Files and attachments
+
+There are four ways to get a file in, and all four are real requests:
+
+| Where                    | Route                                                        |
+| ------------------------ | ------------------------------------------------------------ |
+| Files page, Upload       | `POST /files/upload`, with an optional `folder`              |
+| A project or task drawer | `POST /files/attach`, with `projectId` or `taskId`           |
+| A channel composer       | `POST /files/channel`, posts a `messageType: "file"` message |
+| A direct thread          | `POST /files/message`, returns the message                   |
+
+Folders are derived from the files that exist, so there is no "create folder"
+action: a folder is made by uploading a file into it, and the sidebar lists
+whatever folders the current files fall into. A folder name must be letters,
+numbers, spaces, dots, dashes and underscores.
+
+`GET /files/folders` lists them. Downloads go through
+`GET /files/download/:fileId`, which needs the access token, so the client
+fetches the bytes and plays or saves them from an object URL.
 
 ## Support requests
 

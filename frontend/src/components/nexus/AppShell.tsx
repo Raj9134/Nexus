@@ -25,8 +25,9 @@ import {
   BarChart3,
   ClipboardList,
   Phone,
+  Upload,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Attachments } from "@/components/nexus/Attachments";
@@ -588,6 +589,14 @@ function GlobalModals() {
   const [supportSubject, setSupportSubject] = useState("");
   const [supportMessage, setSupportMessage] = useState("");
   const [supportError, setSupportError] = useState<string | null>(null);
+  // Held as a File rather than a path, because the browser hands over a handle
+  // and the bytes have to be posted as multipart.
+  const [uploadSelection, setUploadSelection] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  // Folders come from the files that exist rather than being declared, so a
+  // folder is created by putting a file in it.
+  const [uploadFolder, setUploadFolder] = useState("General");
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const type = nexus.modal.type;
   const titles: Record<Exclude<ModalState["type"], null>, string> = {
     task: "Create Task",
@@ -622,6 +631,37 @@ function GlobalModals() {
         type === "delete" ? "warning" : "success",
       );
     }, 650);
+  };
+
+  /*
+    The "Upload File" modal had no file picker at all. It asked for a name, a
+    priority and notes, and its Save button ran the generic submit() above,
+    which set a timer and printed a toast: nothing was ever uploaded, so the
+    Files page could not add a file by any route.
+  */
+  const uploadFile = async () => {
+    if (!uploadSelection) {
+      setUploadError("Choose a file to upload.");
+      return;
+    }
+
+    setLoading(true);
+    setUploadError(null);
+
+    try {
+      const created = await api.files.upload(uploadSelection, uploadFolder);
+
+      nexus.closeModal();
+      setUploadSelection(null);
+      nexus.pushToast(`${created.name} uploaded`, "success");
+
+      // The Files page reads from context, so it has to be told.
+      await nexus.reload();
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "The upload failed.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const sendInvites = async () => {
@@ -709,6 +749,7 @@ function GlobalModals() {
   const destructive = type === "delete";
   const isInvite = type === "invite";
   const isSupport = type === "support";
+  const isUpload = type === "upload";
   return (
     <Modal
       open
@@ -720,7 +761,9 @@ function GlobalModals() {
             ? "Send an invitation link. It works for both new and existing accounts."
             : isSupport
               ? `Tell us what happened. This is stored on ${window.location.pathname}.`
-              : "Complete the required fields to continue."
+              : isUpload
+                ? "Choose a file from this device. It is stored in your workspace library."
+                : "Complete the required fields to continue."
       }
       onClose={nexus.closeModal}
       footer={
@@ -728,12 +771,14 @@ function GlobalModals() {
           <Button variant="outline" onClick={nexus.closeModal}>
             Cancel
           </Button>
-          {isInvite || isSupport ? (
+          {isInvite || isSupport || isUpload ? (
             <SubmitButton
               loading={loading}
-              onClick={() => void (isInvite ? sendInvites() : sendSupportRequest())}
+              onClick={() =>
+                void (isInvite ? sendInvites() : isSupport ? sendSupportRequest() : uploadFile())
+              }
             >
-              {isInvite ? "Send invitations" : "Send request"}
+              {isInvite ? "Send invitations" : isSupport ? "Send request" : "Upload"}
             </SubmitButton>
           ) : (
             <SubmitButton
@@ -812,6 +857,61 @@ function GlobalModals() {
           {supportError ? (
             <p role="alert" className="text-xs text-destructive">
               {supportError}
+            </p>
+          ) : null}
+        </div>
+      ) : isUpload ? (
+        <div className="grid gap-4">
+          <input
+            ref={uploadInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              setUploadSelection(event.target.files?.[0] ?? null);
+              setUploadError(null);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            className="flex min-h-28 w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-input bg-secondary/40 px-4 py-6 text-sm text-muted-foreground transition hover:border-primary/60 hover:text-foreground"
+          >
+            <Upload className="h-5 w-5" />
+            {uploadSelection ? (
+              <span className="font-medium text-foreground">{uploadSelection.name}</span>
+            ) : (
+              <span>Choose a file to upload</span>
+            )}
+          </button>
+          {uploadSelection ? (
+            <p className="text-xs text-muted-foreground">
+              {(uploadSelection.size / 1024).toFixed(1)} KB ·{" "}
+              {uploadSelection.type || "unknown type"}
+            </p>
+          ) : null}
+          <label className="text-sm font-medium text-foreground">
+            Folder
+            <input
+              value={uploadFolder}
+              onChange={(event) => setUploadFolder(event.target.value)}
+              maxLength={80}
+              list="nexus-folders"
+              placeholder="General"
+              className="mt-2 h-10 w-full rounded-md border border-input bg-secondary/70 px-3 text-sm outline-none focus:border-primary"
+            />
+            <datalist id="nexus-folders">
+              {nexus.folders.map((folder) => (
+                <option key={folder} value={folder} />
+              ))}
+            </datalist>
+          </label>
+          <p className="text-xs text-muted-foreground">
+            A folder appears in the sidebar once a file is in it. Letters, numbers, spaces, dots,
+            dashes and underscores.
+          </p>
+          {uploadError ? (
+            <p role="alert" className="text-xs text-destructive">
+              {uploadError}
             </p>
           ) : null}
         </div>

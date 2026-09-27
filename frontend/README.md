@@ -122,8 +122,7 @@ notifications
 
 important highlights
 
-==================================================
-2. RESPONSIVE DESIGN
+================================================== 2. RESPONSIVE DESIGN
 
 The application MUST work beautifully on:
 
@@ -165,8 +164,7 @@ Touch-friendly controls
 
 No horizontal page overflow.
 
-==================================================
-3. APPLICATION SHELL
+================================================== 3. APPLICATION SHELL
 
 Create a professional application shell.
 
@@ -235,8 +233,7 @@ Active navigation indicator
 
 Organization switcher dropdown
 
-==================================================
-4. TOP NAVBAR
+================================================== 4. TOP NAVBAR
 
 Top navigation should contain:
 
@@ -273,8 +270,7 @@ timestamps
 
 notification categories
 
-==================================================
-5. GLOBAL SEARCH
+================================================== 5. GLOBAL SEARCH
 
 Create a powerful command-palette-style search experience.
 
@@ -320,8 +316,7 @@ Messages
 
 Use highlighted search terms.
 
-==================================================
-6. OVERVIEW DASHBOARD
+================================================== 6. OVERVIEW DASHBOARD
 
 Create a visually impressive executive dashboard.
 
@@ -368,8 +363,7 @@ vs last month
 
 Do not overuse colors.
 
-==================================================
-7. DASHBOARD ANALYTICS
+================================================== 7. DASHBOARD ANALYTICS
 
 Create a beautiful analytics section.
 
@@ -415,8 +409,7 @@ Use realistic data.
 
 Charts should look premium and clean.
 
-==================================================
-8. RECENT ACTIVITY
+================================================== 8. RECENT ACTIVITY
 
 Create a timeline:
 
@@ -440,8 +433,7 @@ resource
 
 timestamp
 
-==================================================
-9. MY TASKS
+================================================== 9. MY TASKS
 
 Create a dedicated task management page.
 
@@ -502,8 +494,7 @@ Tasks should be interactive.
 
 Clicking a task opens a detailed side panel.
 
-==================================================
-10. TASK DETAIL PANEL
+================================================== 10. TASK DETAIL PANEL
 
 Create a beautiful task detail drawer.
 
@@ -572,8 +563,7 @@ Assign
 Change Status
 Delete
 
-==================================================
-11. PROJECTS PAGE
+================================================== 11. PROJECTS PAGE
 
 Create a project management page.
 
@@ -627,8 +617,7 @@ Include:
 
 New Project
 
-==================================================
-12. PROJECT DETAIL
+================================================== 12. PROJECT DETAIL
 
 This should be one of the strongest pages.
 
@@ -654,8 +643,7 @@ Files
 Chat
 Analytics
 
-==================================================
-13. KANBAN BOARD
+================================================== 13. KANBAN BOARD
 
 Create a premium Jira/Linear-style Kanban board.
 
@@ -698,8 +686,7 @@ Add:
 
 Add task
 
-==================================================
-14. TEAM PAGE
+================================================== 14. TEAM PAGE
 
 Create a team management page.
 
@@ -742,8 +729,7 @@ Add member button.
 
 Member profile drawer.
 
-==================================================
-15. MEMBER PROFILE
+================================================== 15. MEMBER PROFILE
 
 Create detailed member profile.
 
@@ -778,8 +764,7 @@ Completion Rate
 
 Recent activity timeline.
 
-==================================================
-16. REAL-TIME CHAT
+================================================== 16. REAL-TIME CHAT
 
 Create a premium Slack-like messaging interface.
 
@@ -842,8 +827,7 @@ Online users.
 
 Unread messages.
 
-==================================================
-17. CALENDAR
+================================================== 17. CALENDAR
 
 Create a professional team calendar.
 
@@ -867,8 +851,7 @@ Clicking an event opens a detail modal.
 
 Create Event button.
 
-==================================================
-18. FILES
+================================================== 18. FILES
 
 Create a modern file management page.
 
@@ -907,8 +890,7 @@ Use file type icons.
 
 Create preview drawer for files.
 
-==================================================
-19. NOTIFICATIONS
+================================================== 19. NOTIFICATIONS
 
 Create a dedicated notification center.
 
@@ -940,8 +922,7 @@ Mark as read
 Mark all as read
 Notification preferences
 
-==================================================
-20. ANALYTICS PAGE
+================================================== 20. ANALYTICS PAGE
 
 Create a powerful analytics dashboard.
 
@@ -975,8 +956,7 @@ Export options:
 CSV
 PDF
 
-==================================================
-21. AUDIT LOGS
+================================================== 21. AUDIT LOGS
 
 Create an enterprise-grade audit log page.
 
@@ -1010,8 +990,7 @@ Export
 
 Audit details open in a drawer.
 
-==================================================
-22. ADMIN PANEL
+================================================== 22. ADMIN PANEL
 
 Create an admin dashboard.
 
@@ -1060,8 +1039,7 @@ Settings
 
 Allow toggling permissions.
 
-==================================================
-23. SETTINGS
+================================================== 23. SETTINGS
 
 Create polished settings pages.
 
@@ -1103,8 +1081,7 @@ Mentions
 Task updates
 Project updates
 
-==================================================
-24. AUTHENTICATION PAGES
+================================================== 24. AUTHENTICATION PAGES
 
 Create beautiful authentication screens.
 
@@ -1144,8 +1121,7 @@ Create account
 
 Make these pages visually impressive but not overly flashy.
 
-==================================================
-25. ONBOARDING
+================================================== 25. ONBOARDING
 
 After registration, create onboarding.
 
@@ -1181,8 +1157,7 @@ Show progress:
 
 Use smooth transitions.
 
-==================================================
-26. EMPTY STATES
+================================================== 26. EMPTY STATES
 
 Do NOT leave blank pages.
 
@@ -1205,8 +1180,7 @@ Notifications
 Teams
 Calendar
 
-==================================================
-27. LOADING STATES
+================================================== 27. LOADING STATES
 
 Use skeleton loaders for:
 
@@ -1219,8 +1193,7 @@ Tables
 
 Never show ugly generic loading spinners everywhere.
 
-==================================================
-28. ERROR STATES
+================================================== 28. ERROR STATES
 
 Create polished error UI.
 
@@ -1240,8 +1213,7 @@ Also:
 
 500 Server Error
 
-==================================================
-29. MICRO-INTERACTIONS
+================================================== 29. MICRO-INTERACTIONS
 
 Use subtle animations.
 
@@ -1263,8 +1235,7 @@ Keep animations professional.
 
 Do NOT use excessive animations.
 
-==================================================
-30. TOAST SYSTEM
+================================================== 30. TOAST SYSTEM
 
 Create reusable toast notifications.
 
@@ -1280,8 +1251,7 @@ Examples:
 
 ✕ Failed to upload file
 
-==================================================
-31. MODALS
+================================================== 31. MODALS
 
 Create reusable modal components.
 
@@ -1304,8 +1274,7 @@ Error messages
 Loading state
 Success state
 
-==================================================
-32. COMPONENT SYSTEM
+================================================== 32. COMPONENT SYSTEM
 
 Build reusable components.
 
@@ -1338,8 +1307,7 @@ Breadcrumbs
 
 Do NOT duplicate UI code unnecessarily.
 
-==================================================
-33. DATA & STATE
+================================================== 33. DATA & STATE
 
 Create realistic mock data.
 
@@ -1372,8 +1340,7 @@ with:
 
 GET /api/projects
 
-==================================================
-34. API-READY ARCHITECTURE
+================================================== 34. API-READY ARCHITECTURE
 
 Frontend should be prepared for a Node.js + Express backend.
 
@@ -1394,8 +1361,7 @@ data/
 
 Keep business logic separated from presentation.
 
-==================================================
-35. BACKEND API CONTRACT PLACEHOLDERS
+================================================== 35. BACKEND API CONTRACT PLACEHOLDERS
 
 Create frontend service methods for future endpoints.
 
@@ -1454,8 +1420,7 @@ GET /api/audit-logs
 
 Do not actually require these APIs yet. Use mock implementations so the frontend works independently.
 
-==================================================
-36. ACCESSIBILITY
+================================================== 36. ACCESSIBILITY
 
 Follow accessibility best practices.
 
@@ -1470,8 +1435,7 @@ Accessible dropdowns
 Readable contrast
 Proper form labels
 
-==================================================
-37. UX DETAILS
+================================================== 37. UX DETAILS
 
 Add breadcrumbs where useful.
 
@@ -1496,8 +1460,7 @@ Example:
 
 When changing a task status, update UI immediately and then simulate API success.
 
-==================================================
-38. MOBILE EXPERIENCE
+================================================== 38. MOBILE EXPERIENCE
 
 Mobile dashboard should not simply shrink desktop UI.
 
@@ -1529,8 +1492,7 @@ Chat:
 
 Full-screen conversation.
 
-==================================================
-39. DESIGN QUALITY REQUIREMENT
+================================================== 39. DESIGN QUALITY REQUIREMENT
 
 The final product should look like an actual funded SaaS startup.
 
@@ -1580,8 +1542,7 @@ meaningful data visualization
 
 intuitive navigation
 
-==================================================
-40. LANDING PAGE
+================================================== 40. LANDING PAGE
 
 Also create a public marketing landing page.
 
@@ -1655,8 +1616,7 @@ CTA:
 
 Get Started
 
-==================================================
-41. DEMO ACCOUNT
+================================================== 41. DEMO ACCOUNT
 
 Create a demo mode.
 
@@ -1685,8 +1645,7 @@ files
 calendar events
 audit logs
 
-==================================================
-42. FINAL POLISH
+================================================== 42. FINAL POLISH
 
 Before finishing:
 

@@ -831,10 +831,14 @@ export const api = {
      * A loose upload into the file library. The backend ignores any project or
      * task field here, so associating a file with one is `attach`'s job.
      */
-    async upload(file: File): Promise<FileItem> {
+    async upload(file: File, folder?: string): Promise<FileItem> {
       const form = new FormData();
 
       form.append("file", file);
+
+      if (folder?.trim()) {
+        form.append("folder", folder.trim());
+      }
 
       const payload = await rawRequest<unknown>(
         "/files/upload",
@@ -895,6 +899,35 @@ export const api = {
       );
 
       return one<MessageItem>(payload, "data", payload as MessageItem);
+    },
+
+    /**
+     * Posts a file into a channel as a message. Answers with both, because the
+     * composer needs the message to render and the list needs the file metadata.
+     */
+    async sendToChannel(
+      file: File,
+      channel: string,
+      caption = "",
+    ): Promise<{ message: MessageItem; file: FileItem }> {
+      const form = new FormData();
+
+      form.append("file", file);
+      form.append("channel", channel);
+
+      if (caption.trim()) {
+        form.append("message", caption.trim());
+      }
+
+      const payload = await rawRequest<{
+        data: unknown;
+        file: unknown;
+      }>("/files/channel", { method: "POST", body: form }, readStorage(ACCESS_TOKEN_KEY));
+
+      return {
+        message: one<MessageItem>(payload, "data", payload.data as MessageItem),
+        file: one<FileItem>(payload, "file", payload.file as FileItem),
+      };
     },
 
     async download(id: string, filename: string): Promise<void> {

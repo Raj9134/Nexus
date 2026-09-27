@@ -7,7 +7,8 @@ const {
     checkProjectAccess,
     checkTaskAccess,
     checkFileAccess,
-    checkFileManagement
+    checkFileManagement,
+    checkChannelAccess
 } = require("../services/permissionService");
 
 const {
@@ -22,7 +23,14 @@ const { listFiles, listFileFolders } = require("../services/workspaceService");
 
 const { resolveTaskId } = require("./taskController");
 
-const { serializeFile, nameOf } = require("../utils/serialize");
+const { serializeFile, serializeMessage, nameOf } = require("../utils/serialize");
+
+/** Matches the cap messageController applies, so a caption cannot be refused here. */
+const MESSAGE_MAX = 4000;
+
+const cleanText = (value) => {
+    return typeof value === "string" ? value.trim() : "";
+};
 
 const accessDeniedMessage = (status, notFound, forbidden) => {
     return status === 404 ? notFound : forbidden;
@@ -58,9 +66,32 @@ const createFileRecord = async (multerFile, extra = {}) => {
         size: multerFile.size,
         uploadedBy: extra.uploadedBy,
         project: extra.project || null,
-        task: extra.task || null
+        task: extra.task || null,
+        folder: extra.folder || "General"
     });
 };
+
+/*
+    Folders are derived from the files that exist, so the name has to be safe to
+    echo into a list and to compare. Anything that is not a plain word is
+    refused rather than trimmed, and an empty value falls back to the default.
+*/
+const FOLDER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}$/;
+
+const resolveFolder = (value) => {
+    const folder = cleanText(value);
+
+    if (!folder) {
+        return "General";
+    }
+
+    if (!FOLDER_PATTERN.test(folder)) {
+        return null;
+    }
+
+    return folder;
+};
+
 
 const uploadFile = async (req, res) => {
 
@@ -70,8 +101,18 @@ const uploadFile = async (req, res) => {
         });
     }
 
+    const folder = resolveFolder(req.body?.folder);
+
+    if (folder === null) {
+        removeTemporaryUpload(req.file);
+        return res.status(400).json({
+            message: "The folder name is not allowed"
+        });
+    }
+
     const file = await createFileRecord(req.file, {
-        uploadedBy: req.userId
+        uploadedBy: req.userId,
+        folder
     });
 
     return res.status(201).json({
@@ -175,8 +216,91 @@ const sendFileMessage = async (req, res) => {
 
 };
 
-const attachFile = async (req, res) => {
+/**
+ * Posts an upload into a channel as a file message.
+ *
+ * The channel composer's paperclip used to show an "Attachment picker opened"
+ * toast and send nothing. The Message model already allowed messageType "file"
+ * and serializeMessage already exposed fileId, but no route ever created one,
+ * so a file could be sent in a direct thread and not in a channel.
+ */
+const sendChannelFile = async (req, res) => {
 
+    if (!req.file) {
+        return res.status(400).json({
+            message: "File is required"
+        });
+    }
+
+    const channel = cleanText(req.body.channel).toLowerCase();
+
+    if (!channel) {
+        removeTemporaryUpload(req.file);
+        return res.status(400).json({
+            message: "A channel is required"
+        });
+    }
+
+    const access = await checkChannelAccess(channel, req.user);
+
+    if (!access.allowed) {
+        removeTemporaryUpload(req.file);
+        return res.status(access.status).json({
+            message: access.status === 404
+                ? "Channel not found"
+                : "You are not allowed to post in this channel"
+        });
+    }
+
+    let file = null;
+
+    try {
+        file = await createFileRecord(req.file, {
+            uploadedBy: req.userId
+        });
+
+        const message = await Message.create({
+            sender: req.userId,
+            channel: access.channel ? access.channel.name : channel,
+            messageType: "file",
+            message: cleanText(req.body.message).slice(0, MESSAGE_MAX),
+            file: file._id
+        });
+
+        const populated = await Message.findById(message._id)
+            .populate("sender", "name email")
+            .populate("file");
+
+        const payload = serializeMessage(
+            populated,
+            populated.sender ? populated.sender.name : ""
+        );
+
+        const io = req.app.get("io");
+
+        if (io) {
+            io.to(`channel:${payload.channel}`).emit("newChannelMessage", payload);
+        }
+
+        return res.status(201).json({
+            message: "File sent successfully",
+            data: payload,
+            file: toFileItem(await withOwner(file))
+        });
+    } catch (error) {
+        if (file) {
+            await Message.updateMany({ file: file._id }, { $set: { file: null } });
+            await File.findByIdAndDelete(file._id);
+            removeUpload(file.fileName);
+        } else {
+            removeTemporaryUpload(req.file);
+        }
+
+        throw error;
+    }
+};
+
+const attachFile = async (req, res) => {
     if (!req.file) {
         return res.status(400).json({
             message: "File is required"
@@ -483,6 +607,7 @@ const getFolders = async (req, res) => {
 module.exports = {
     uploadFile,
     sendFileMessage,
+    sendChannelFile,
     attachFile,
     getProjectFiles,
     getTaskFiles,

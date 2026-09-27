@@ -6,7 +6,12 @@ const Organization = require("../models/Organization");
 const auditService = require("../services/auditService");
 const authTokens = require("../models/AuthToken");
 const emailService = require("../services/emailService");
-const { listUsers, userStats, accessibleOrganizationIds } = require("../services/workspaceService");
+const {
+    listUsers,
+    userStats,
+    accessibleOrganizationIds,
+    serializeUserWithRole
+} = require("../services/workspaceService");
 const { serializeUser } = require("../utils/serialize");
 const { USER_STATUSES } = require("../constants/nexus");
 
@@ -235,7 +240,12 @@ const getMe = async (req, res) => {
     }
 
     return res.status(200).json({
-        user: serializeUser(user, await userStats(user._id))
+        /*
+            serializeUserWithRole, not serializeUser: the stored User.role is
+            never written, so a workspace owner was reported as "Member" here
+            while GET /team called the same person "Organization Admin".
+        */
+        user: await serializeUserWithRole(user, await userStats(user._id))
     });
 };
 

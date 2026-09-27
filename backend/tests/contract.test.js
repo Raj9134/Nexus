@@ -335,6 +335,51 @@ const report = () => {
     check("GET /messages?channel", listed.status, 200);
     check("channel message listed", listed.data.messages.some((m) => m.body === "hello team"), true);
 
+    /*
+      Files in a channel. The composer's paperclip used to show an "Attachment
+      picker opened" toast and send nothing, and the Message model already
+      allowed messageType "file" with a file reference, so no route ever created
+      one. These pin down that the file is stored, that the message points at it,
+      and that the same checks the direct-message route has also hold here.
+    */
+    const FILE_MESSAGE = MESSAGE;
+
+    check("channel file with no file -> 400", (await callForm("POST", "/files/channel", token, uploadForm({
+        channel: "general"
+    }))).status, 400);
+
+    check("channel file with no channel -> 400", (await callForm("POST", "/files/channel", token, uploadForm({
+        file: probeFile()
+    }))).status, 400);
+
+    check("channel file for a channel that does not exist -> 404", (await callForm("POST", "/files/channel", token, uploadForm({
+        file: probeFile(),
+        channel: "no-such-channel-here"
+    }))).status, 404);
+
+    check("channel file is refused when signed out", (await callForm("POST", "/files/channel", null, uploadForm({
+        file: probeFile(),
+        channel: "general"
+    }))).status, 401);
+
+    const channelFile = await callForm("POST", "/files/channel", token, uploadForm({
+        file: probeFile(),
+        channel: "general",
+        message: "here is the spec"
+    }));
+    check("POST /files/channel", channelFile.status, 201);
+    shape("FileItem contract (channel file)", channelFile.data.file, FILE);
+    shape("MessageItem contract (channel file)", channelFile.data.data, FILE_MESSAGE);
+    check("the channel file message is a file", channelFile.data.data.messageType, "file");
+    check("the channel file message points at the file", typeof channelFile.data.data.fileId, "string");
+    check("the caption is kept", channelFile.data.data.body, "here is the spec");
+    check("channel file never leaks _id", JSON.stringify(channelFile.data).includes("_id"), false);
+
+    const afterChannelFile = await call("GET", "/messages?channel=general", token);
+    check("the file message is listed in the channel", afterChannelFile.data.messages.some(
+        (m) => m.id === channelFile.data.data.id && m.messageType === "file"
+    ), true);
+
     check("message with no target -> 400", (await call("POST", "/messages", token, { message: "orphan" })).status, 400);    check("empty message -> 400", (await call("POST", "/messages", token, { channel: "general", message: "   " })).status, 400);
     check("unknown channel -> 404", (await call("POST", "/messages", token, { channel: "no-such-channel", message: "x" })).status, 404);
     check("self DM -> 400", (await call("POST", "/messages", token, { receiver: owner.data.user.id, message: "self" })).status, 400);
@@ -434,6 +479,22 @@ const report = () => {
     check("team excludes outsider", team.data.users.some((m) => m.id === outsider.data.user.id), false);
 
     /*
+        The owner is "Organization Admin" in the team list because owning a
+        workspace is what makes someone an admin. GET /auth/me reported the
+        stored User.role instead, which nothing has ever written, so the signed
+        in user saw themselves as "Member" while the team list said
+        "Organization Admin". The two have to agree.
+    */
+    const meAsOwner = await call("GET", "/auth/me", token);
+    check("GET /auth/me for the owner", meAsOwner.status, 200);
+    shape("User contract (auth/me)", meAsOwner.data.user, USER);
+    check("the owner is an admin on their own profile", meAsOwner.data.user.role, "Organization Admin");
+    check("auth/me agrees with the team list", meAsOwner.data.user.role, team.data.users.find((m) => m.id === owner.data.user.id).role);
+
+    const meAsMate = await call("GET", "/auth/me", mateToken);
+    check("a plain member is not an admin on their own profile", meAsMate.data.user.role !== "Organization Admin", true);
+
+    /*
         Workspace admin means owning the workspace. The old gate compared a
         global user.role that nothing ever set, so /auth/users answered 403 for
         everyone, including the owner of the workspace.
@@ -486,6 +547,34 @@ const report = () => {
     check("POST /files/attach (project)", attached.status, 201);
     shape("FileItem contract (attach)", attached.data.file, FILE);
     values("FileItem values (attach)", attached.data.file, ["id", "name", "owner"]);
+
+    /*
+      Folders. The File model has always had a folder field and the folder list
+      is derived from it, but nothing could set one, so every file landed in
+      "General" and the Files page's "Create Folder" button stored nothing.
+    */
+    check("upload with no folder -> General", uploaded.data.file.folder, "General");
+
+    const foldered = await callForm("POST", "/files/upload", token, uploadForm({
+        file: probeFile(),
+        folder: "Design Docs"
+    }));
+    check("upload into a named folder", foldered.status, 201);
+    check("the named folder is kept", foldered.data.file.folder, "Design Docs");
+
+    const folders = await call("GET", "/files/folders", token);
+    check("GET /files/folders", folders.status, 200);
+    check("the folder list includes the named folder", folders.data.folders.includes("Design Docs"), true);
+    check("the folder list includes the default", folders.data.folders.includes("General"), true);
+
+    check("an unusable folder name -> 400", (await callForm("POST", "/files/upload", token, uploadForm({
+        file: probeFile(),
+        folder: "../../etc"
+    }))).status, 400);
+    check("a blank folder falls back to General", (await callForm("POST", "/files/upload", token, uploadForm({
+        file: probeFile(),
+        folder: "   "
+    }))).data.file.folder, "General");
 
     check("attach to a project and a task -> 400", (await callForm("POST", "/files/attach", token, uploadForm({
         file: probeFile(),

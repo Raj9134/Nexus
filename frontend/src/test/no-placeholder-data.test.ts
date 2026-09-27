@@ -173,3 +173,63 @@ describe("controls that claim to have done something", () => {
     expect(shell).toContain('openModal("support")');
   });
 });
+
+describe("file controls", () => {
+  /*
+    Every way of getting a file into the app was dead. The Files page "Upload"
+    modal asked for a name, a priority and notes, and its Save button ran the
+    generic submit, which set a timer and printed a toast. The channel
+    composer's paperclip printed "Attachment picker opened" and the direct
+    thread's was hardcoded `disabled`. The backend has accepted uploads the
+    whole time.
+  */
+  const shell = read(join(SRC, "components", "nexus", "AppShell.tsx"));
+  const pages = read(join(SRC, "pages", "AppPages.tsx"));
+  const thread = read(join(SRC, "components", "nexus", "DirectThread.tsx"));
+
+  it("the Files page upload modal has a real picker, not a name field", () => {
+    expect(shell).toContain('type="file"');
+    expect(shell).toMatch(/api\.files\.upload\(uploadSelection/);
+  });
+
+  it("the channel composer posts the file instead of announcing a picker", () => {
+    expect(pages).toContain("api.files.sendToChannel(");
+    expect(pages).not.toContain("Attachment picker opened");
+  });
+
+  it("the direct thread paperclip is enabled and sends", () => {
+    expect(thread).toContain("api.files.sendAsMessage(");
+    // `disabled` with no condition, next to the aria-label, is the old bug.
+    expect(thread).not.toMatch(/aria-label="Attach a file"[^>]*\sdisabled\s*>/);
+  });
+
+  it("every file input clears so the same file can be picked twice", () => {
+    for (const [name, source] of [
+      ["channel composer", pages],
+      ["direct thread", thread],
+    ] as const) {
+      expect(source, `${name} must reset its input`).toContain('event.target.value = ""');
+    }
+  });
+
+  /*
+    Folders are derived from the files that exist, so the Files page's
+    "Create Folder" button could only ever lie: it printed "Folder created"
+    and stored nothing, and no route has ever created a folder. A folder is
+    made by uploading a file into it, so the button is gone and the upload form
+    asks for the folder instead.
+  */
+  it("has no create-folder button that stores nothing", () => {
+    expect(pages).not.toContain("Folder created");
+    expect(pages).not.toContain("Create Folder");
+  });
+
+  it("sorts and filters the real list rather than announcing it", () => {
+    expect(pages).not.toContain("Sort changed");
+    expect(pages).toContain('setSort(next as "name" | "size")');
+  });
+
+  it("puts the folder in the folder sidebar when a file is uploaded", () => {
+    expect(shell).toContain("api.files.upload(uploadSelection, uploadFolder)");
+  });
+});

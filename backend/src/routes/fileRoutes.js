@@ -7,6 +7,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 const {
     uploadFile,
     sendFileMessage,
+    sendChannelFile,
     attachFile,
     getProjectFiles,
     getTaskFiles,
@@ -45,6 +46,15 @@ router.post(
     authMiddleware,
     upload.single("file"),
     sendFileMessage
+);
+
+
+// Declared before "/:fileId" so "channel" is not read as a file id.
+router.post(
+    "/channel",
+    authMiddleware,
+    upload.single("file"),
+    sendChannelFile
 );
 
 

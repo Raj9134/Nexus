@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, Paperclip, Send } from "lucide-react";
 
 import {
@@ -31,6 +31,7 @@ export function DirectThread({ peer }: { peer: User }) {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const me = nexus.currentUser;
   const live = nexus.isDemo === false && isAuthenticated();
@@ -95,6 +96,28 @@ export function DirectThread({ peer }: { peer: User }) {
       } catch (caught) {
         nexus.pushToast(
           caught instanceof Error ? caught.message : "Could not send the voice message",
+          "error",
+        );
+      }
+    },
+    [nexus, peer.id],
+  );
+
+  /*
+    The paperclip was hardcoded `disabled`, so a file could not be sent in a
+    direct thread even though POST /files/message has always existed. The
+    backend answers with the message, so it appends like any other.
+  */
+  const sendFile = useCallback(
+    async (file: File) => {
+      try {
+        const sent = await api.files.sendAsMessage(file, peer.id);
+
+        setMessages((items) => [...items, sent]);
+        nexus.pushToast(`Sent ${file.name}`, "success");
+      } catch (caught) {
+        nexus.pushToast(
+          caught instanceof Error ? caught.message : `Could not send ${file.name}`,
           "error",
         );
       }
@@ -189,7 +212,33 @@ export function DirectThread({ peer }: { peer: User }) {
             placeholder={`Message ${peer.name.split(" ")[0]}...`}
             className="max-h-32 min-h-9 flex-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <Button type="button" size="icon" variant="ghost" aria-label="Attach a file" disabled>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+
+              /*
+                Cleared up front, not in a finally: a browser only fires change
+                when the value actually differs, so leaving it set would make
+                re-picking the same file do nothing.
+              */
+              event.target.value = "";
+
+              if (file) {
+                void sendFile(file);
+              }
+            }}
+          />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Attach a file"
+            disabled={!live}
+            onClick={() => fileInputRef.current?.click()}
+          >
             <Paperclip />
           </Button>
           <VoiceRecorder onSend={sendVoice} disabled={!live} />
