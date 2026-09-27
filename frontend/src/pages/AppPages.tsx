@@ -38,6 +38,8 @@ import type { Project, Task, TaskStatus, User } from "@/types/nexus";
 import { AppShell } from "@/components/nexus/AppShell";
 import { DirectThread } from "@/components/nexus/DirectThread";
 import { Attachments } from "@/components/nexus/Attachments";
+import { ChannelManager } from "@/components/nexus/ChannelManager";
+import { WorkspaceMembers } from "@/components/nexus/WorkspaceMembers";
 import {
   Avatar,
   Badge,
@@ -1427,6 +1429,7 @@ export function AdminPage() {
         <Tabs
           tabs={[
             "Users",
+            "Channels",
             "Organizations",
             "Roles & Permissions",
             "Security",
@@ -1436,6 +1439,7 @@ export function AdminPage() {
           value={section}
           onChange={setSection}
         />
+        {section === "Channels" ? <ChannelManager /> : null}
         {section === "Roles & Permissions" ? (
           <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
             <Card>
@@ -1471,6 +1475,14 @@ export function AdminPage() {
               </div>
             </Card>
           </div>
+        ) : section === "Users" ? (
+          /*
+            The old table carried "Change Role" and "Suspend" buttons that only
+            raised a toast. Neither operation exists in the API, and a control
+            that pretends to work is worse than no control, so the tab now
+            shows real membership: invite by email, and remove.
+          */
+          <WorkspaceMembers />
         ) : (
           <Card className="p-0">
             <div className="divide-y divide-border">
@@ -1495,16 +1507,6 @@ export function AdminPage() {
                   <span className="flex flex-wrap gap-2">
                     <Button size="sm" variant="secondary" onClick={() => nexus.openUser(user)}>
                       View
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => nexus.openModal("role")}>
-                      Change Role
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => nexus.pushToast("User suspended", "warning")}
-                    >
-                      Suspend
                     </Button>
                   </span>
                 </div>

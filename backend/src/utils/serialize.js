@@ -285,7 +285,10 @@ function serializeChannel(channel) {
         name: channel.name || "",
         description: channel.description || "",
         isPrivate: Boolean(channel.isPrivate),
-        members: (channel.members || []).map(idOf).filter(Boolean)
+        members: (channel.members || []).map(idOf).filter(Boolean),
+        // Only the creator may delete a channel, so a client needs to know
+        // which ones those are instead of offering the action and taking a 403.
+        createdBy: idOf(channel.createdBy)
     };
 }
 

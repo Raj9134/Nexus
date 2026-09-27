@@ -295,6 +295,35 @@ const report = () => {
     check("channels is string[]", Array.isArray(channels.data.channels) && channels.data.channels.every((c) => typeof c === "string"), true);
     check("frontend default channels present", ["general", "engineering", "backend", "frontend", "random"].every((c) => channels.data.channels.includes(c)), true);
 
+    const CHANNEL = ["id", "name", "description", "isPrivate", "members", "createdBy"];
+
+    check("create channel with a bad name -> 400", (await call("POST", "/channels", token, { name: "Bad Name!", organizationId: orgId })).status, 400);
+    // A missing organizationId resolves as "Organization not found".
+    check("create channel with no target -> 404", (await call("POST", "/channels", token, { name: "valid-name" })).status, 404);
+    check("create channel in a foreign org -> 403", (await call("POST", "/channels", outsiderToken, { name: "steal", organizationId: orgId })).status, 403);
+
+    const createdChannel = await call("POST", "/channels", token, {
+        name: "contract-review",
+        organizationId: orgId,
+        description: "created by the contract test"
+    });
+    check("create channel", createdChannel.status, 201);
+    shape("Channel contract (create)", createdChannel.data.channel, CHANNEL);
+    check("the creator is recorded", createdChannel.data.channel.createdBy, owner.data.user.id);
+
+    check("a duplicate name -> 409", (await call("POST", "/channels", token, { name: "contract-review", organizationId: orgId })).status, 409);
+
+    const channelRecords = await call("GET", "/channels/records", token);
+    check("GET /channels/records", channelRecords.status, 200);
+    check("the new channel is listed", channelRecords.data.channels.some((c) => c.name === "contract-review"), true);
+    shape("Channel contract (records)", channelRecords.data.channels.find((c) => c.name === "contract-review"), CHANNEL);
+    check("records never leak _id", JSON.stringify(channelRecords.data).includes("_id"), false);
+
+    // A non-creator outside the workspace cannot even see it, so 404 not 403.
+    check("a stranger cannot delete the channel", (await call("DELETE", "/channels/contract-review", outsiderToken)).status, 404);
+    check("the creator can delete the channel", (await call("DELETE", "/channels/contract-review", token)).status, 200);
+    check("deleting it twice -> 404", (await call("DELETE", "/channels/contract-review", token)).status, 404);
+
     const post = await call("POST", "/messages", token, { channel: "general", message: "hello team" });
     check("post message to channel", post.status, 201);
     shape("MessageItem contract", post.data.data, MESSAGE);

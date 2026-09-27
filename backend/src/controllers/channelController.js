@@ -3,6 +3,7 @@ const Organization = require("../models/Organization");
 
 const { checkOrganizationAccess } = require("../services/permissionService");
 const { listChannels, listChannelRecords, accessibleOrganizationIds } = require("../services/workspaceService");
+const { serializeChannel } = require("../utils/serialize");
 const auditService = require("../services/auditService");
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$/;
@@ -84,13 +85,9 @@ const createChannel = async (req, res) => {
 
     return res.status(201).json({
         message: "Channel created successfully",
-        channel: {
-            id: String(channel._id),
-            name: channel.name,
-            description: channel.description,
-            isPrivate: channel.isPrivate,
-            members: channel.members.map(String)
-        }
+        // Was an inline literal, so the create response was missing
+        // createdBy that /channels/records returns. Same shape now.
+        channel: serializeChannel(channel)
     });
 };
 

@@ -187,6 +187,8 @@ export interface ChannelRecord {
   description: string;
   isPrivate: boolean;
   members: string[];
+  /** Only this user may delete the channel. */
+  createdBy: string;
 }
 
 export type CallStatus = "calling" | "accepted" | "rejected" | "ended" | "missed";
