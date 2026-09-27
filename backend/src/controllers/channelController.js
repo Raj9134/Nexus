@@ -118,7 +118,7 @@ const deleteChannel = async (req, res) => {
         return res.status(404).json({ message: "Channel not found" });
     }
 
-    if (String(channel.createdBy) !== req.userId && req.user.role !== "admin") {
+    if (String(channel.createdBy) !== req.userId) {
         return res.status(403).json({
             message: "You are not allowed to delete this channel"
         });

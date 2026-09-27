@@ -164,7 +164,22 @@ const listUsers = async (user) => {
         statsByUser.set(idOf(entry._id), current);
     }
 
-    return users.map((entry) => serializeUser(entry, statsByUser.get(idOf(entry)) || {}));
+    /*
+        Owning a workspace is what makes someone an admin here, so the label
+        has to come from the same place the permission checks read.
+    */
+    const ownerIds = new Set(organizations.map((organization) => idOf(organization.createdBy)));
+
+    return users.map((entry) => {
+        const userId = idOf(entry);
+        const stats = statsByUser.get(userId) || {};
+
+        if (ownerIds.has(userId)) {
+            stats.role = "Organization Admin";
+        }
+
+        return serializeUser(entry, stats);
+    });
 };
 
 const listProjects = async (user, { status, search, organizationId } = {}) => {

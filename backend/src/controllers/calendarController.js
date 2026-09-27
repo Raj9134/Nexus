@@ -184,7 +184,7 @@ const updateEvent = async (req, res) => {
     const isCreator = String(event.createdBy) === req.userId;
     const isOwner = String(organization.createdBy) === req.userId;
 
-    if (!isCreator && !isOwner && req.user.role !== "admin") {
+    if (!isCreator && !isOwner) {
         return res.status(403).json({
             message: "You are not allowed to update this event"
         });
@@ -271,7 +271,7 @@ const deleteEvent = async (req, res) => {
     const isCreator = String(event.createdBy) === req.userId;
     const isOwner = String(organization.createdBy) === req.userId;
 
-    if (!isCreator && !isOwner && req.user.role !== "admin") {
+    if (!isCreator && !isOwner) {
         return res.status(403).json({
             message: "You are not allowed to delete this event"
         });

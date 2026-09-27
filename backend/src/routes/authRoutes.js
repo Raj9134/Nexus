@@ -1,7 +1,6 @@
 const express = require("express");
 
 const authMiddleware = require("../middleware/authMiddleware");
-const roleMiddleware = require("../middleware/roleMiddleware");
 
 const {
     registerUser,
@@ -44,10 +43,14 @@ router.patch("/me", authMiddleware, updateMyProfile);
 
 router.put("/me", authMiddleware, updateMyProfile);
 
+/*
+    No roleMiddleware here. It compared against the global user.role, which
+    nothing ever set, so this route answered 403 for every account. The
+    handler now checks for a workspace the caller actually owns.
+*/
 router.get(
     "/users",
     authMiddleware,
-    roleMiddleware("admin"),
     getAllUsers
 );
 

@@ -2,11 +2,12 @@ const Organization = require("../models/Organization");
 
 const { listAuditLogs, accessibleOrganizationIds } = require("../services/workspaceService");
 
+/*
+    Audit history is for the people who run a workspace. The old first branch
+    returned true for a global user.role that nothing ever set, so it was dead
+    and the real check below was doing all the work anyway.
+*/
 const canViewAudit = async (user) => {
-    if (user.role === "admin") {
-        return true;
-    }
-
     const organizationIds = await accessibleOrganizationIds(user);
 
     if (!organizationIds.length) {

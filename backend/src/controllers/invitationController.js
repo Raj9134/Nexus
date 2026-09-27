@@ -263,10 +263,13 @@ const acceptInvite = async (req, res) => {
         return res.status(404).json({ message: "The workspace no longer exists" });
     }
 
-    if (invite.role === "admin" && !organization.admins.includes(user._id)) {
-        organization.admins.push(user._id);
-    }
-
+    /*
+        The old line here pushed into organization.admins, a field the
+        Organization schema has never had, so it would have thrown a TypeError
+        on undefined. It was also unreachable: invitations.issue is only ever
+        called without a role, so invite.role is always "member". Workspace
+        admin means owning the workspace, which is what createdBy records.
+    */
     const isMember = (organization.members || []).some(
         (member) => member.toString() === user._id.toString()
     );

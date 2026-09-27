@@ -320,6 +320,25 @@ const report = () => {
     check("team.users includes added mate", team.data.users.some((m) => m.id === mateId), true);
     check("team excludes outsider", team.data.users.some((m) => m.id === outsider.data.user.id), false);
 
+    /*
+        Workspace admin means owning the workspace. The old gate compared a
+        global user.role that nothing ever set, so /auth/users answered 403 for
+        everyone, including the owner of the workspace.
+    */
+    const ownerInTeam = team.data.users.find((m) => m.id === owner.data.user.id);
+    const mateInTeam = team.data.users.find((m) => m.id === mateId);
+    check("the workspace owner is labelled an admin", ownerInTeam.role, "Organization Admin");
+    check("an added member is not", mateInTeam.role, "Member");
+
+    const authUsers = await call("GET", "/auth/users", token);
+    check("GET /auth/users as the workspace owner", authUsers.status, 200);
+    check("it is scoped to the caller's workspace", authUsers.data.users.some((m) => m.id === mateId), true);
+    check("it cannot enumerate the deployment", authUsers.data.users.some((m) => m.id === outsider.data.user.id), false);
+    check("GET /auth/users for an org owner", (await call("GET", "/auth/users", outsiderToken)).status, 200);
+    // mate is a member of org A and owns no workspace of their own.
+    check("GET /auth/users for a plain member", (await call("GET", "/auth/users", mateToken)).status, 403);
+    check("GET /auth/users with no token", (await call("GET", "/auth/users", null)).status, 401);
+
     // files
     const files = await call("GET", "/files", token);
     check("GET /files", files.status, 200);

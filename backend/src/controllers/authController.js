@@ -1,11 +1,12 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Organization = require("../models/Organization");
 
 const auditService = require("../services/auditService");
 const authTokens = require("../models/AuthToken");
 const emailService = require("../services/emailService");
-const { listUsers, userStats } = require("../services/workspaceService");
+const { listUsers, userStats, accessibleOrganizationIds } = require("../services/workspaceService");
 const { serializeUser } = require("../utils/serialize");
 const { USER_STATUSES } = require("../constants/nexus");
 
@@ -306,7 +307,18 @@ const logoutUser = async (req, res) => {
  */
 const getAllUsers = async (req, res) => {
     try {
-        if (req.user.role !== "admin") {
+        /*
+            The gate used to be a global user.role that nothing ever set, so
+            this answered 403 for every account including workspace owners.
+            Owning at least one workspace is the admin concept the rest of the
+            permission service already uses.
+        */
+        const owned = await Organization.exists({
+            _id: { $in: await accessibleOrganizationIds(req.user) },
+            createdBy: req.user._id
+        });
+
+        if (!owned) {
             return res.status(403).json({
                 message: "Administrator access required"
             });

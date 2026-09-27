@@ -61,6 +61,12 @@ function serializeUser(user, stats = {}) {
         return null;
     }
 
+    /*
+        The label is whatever the caller knows: listUsers passes "Organization
+        Admin" for the people who own one of the shared workspaces. It used to
+        be derived from a global user.role that nothing ever set, so every
+        account rendered as "Member" no matter what it was allowed to do.
+    */
     const activeTasks = Number(stats.activeTasks) || 0;
     const completed = Number(stats.completed) || 0;
     const total = activeTasks + completed;
@@ -69,7 +75,7 @@ function serializeUser(user, stats = {}) {
         id: idOf(user),
         name: user.name || "",
         email: user.email || "",
-        role: user.title || (user.role === "admin" ? "Organization Admin" : "Member"),
+        role: stats.role || user.title || "Member",
         department: user.department || "General",
         avatar: user.avatar || initials(user.name),
         status: user.status || "Offline",
