@@ -46,6 +46,7 @@ export default tseslint.config(
       "src/components/ui/**/*.{ts,tsx}",
       "src/components/nexus/primitives.tsx",
       "src/context/NexusContext.tsx",
+      "src/context/CallContext.tsx",
     ],
     rules: {
       "react-refresh/only-export-components": "off",

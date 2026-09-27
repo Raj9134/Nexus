@@ -24,11 +24,13 @@ import {
   X,
   BarChart3,
   ClipboardList,
+  Phone,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useNexus } from "@/context/NexusContext";
+import { useCall } from "@/context/CallContext";
 import { cn } from "@/lib/utils";
 import { api } from "@/services/api";
 import type { ModalState } from "@/types/nexus";
@@ -881,7 +883,10 @@ function TaskDetailDrawer() {
 function MemberDrawer() {
   const nexus = useNexus();
   const user = nexus.selectedUser;
+  const { startCall, phase } = useCall();
   if (!user) return null;
+  const isSelf = user.id === nexus.currentUser.id;
+  const busy = phase === "calling" || phase === "connecting" || phase === "active";
   return (
     <Drawer open title={user.name} onClose={nexus.closeUser}>
       <div className="space-y-5">
@@ -892,6 +897,25 @@ function MemberDrawer() {
             <p className="text-sm text-muted-foreground">{user.role}</p>
             <Badge tone={user.status === "Online" ? "success" : "warning"}>{user.status}</Badge>
           </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={() => void startCall(user.id, user.name)}
+            disabled={isSelf || busy}
+          >
+            <Phone />
+            {isSelf ? "This is you" : busy ? "Call in progress" : "Call"}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => nexus.pushToast(`Opened a chat with ${user.name}`)}
+            disabled={isSelf}
+          >
+            <MessageSquare />
+            Message
+          </Button>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {[

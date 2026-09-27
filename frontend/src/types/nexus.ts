@@ -165,3 +165,24 @@ export interface NavItem {
   href: string;
   icon: ReactNode;
 }
+
+/** A call party as serializeCall emits it: populated, never a bare ObjectId. */
+export interface CallParty {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export type CallStatus = "calling" | "accepted" | "rejected" | "ended" | "missed";
+
+export interface CallRecord {
+  id: string;
+  caller: CallParty;
+  receiver: CallParty;
+  status: CallStatus;
+  startedAt: string | null;
+  endedAt: string | null;
+  /** Seconds, filled in by the backend when the call ends. */
+  duration: number;
+  createdAt: string | null;
+}

@@ -2,6 +2,7 @@ import type {
   Analytics,
   AuditLog,
   CalendarEvent,
+  CallRecord,
   FileItem,
   MessageItem,
   NotificationItem,
@@ -790,6 +791,55 @@ export const api = {
       const payload = await request<unknown>(`/search/messages?q=${encodeURIComponent(query)}`);
 
       return unwrap<MessageItem[]>(payload, "messages", []);
+    },
+  },
+
+  calls: {
+    /** Creates the call record, then rings the receiver over the socket. */
+    async start(receiverId: string): Promise<CallRecord> {
+      const payload = await request<unknown>("/calls", {
+        method: "POST",
+        body: { receiver: receiverId },
+      });
+
+      return one<CallRecord>(payload, "call", payload as CallRecord);
+    },
+
+    async accept(callId: string): Promise<CallRecord> {
+      const payload = await request<unknown>(`/calls/${callId}/accept`, { method: "PUT" });
+
+      return one<CallRecord>(payload, "call", payload as CallRecord);
+    },
+
+    async reject(callId: string): Promise<CallRecord> {
+      const payload = await request<unknown>(`/calls/${callId}/reject`, { method: "PUT" });
+
+      return one<CallRecord>(payload, "call", payload as CallRecord);
+    },
+
+    /** The receiver reporting they could not pick up. */
+    async miss(callId: string): Promise<CallRecord> {
+      const payload = await request<unknown>(`/calls/${callId}/miss`, { method: "PUT" });
+
+      return one<CallRecord>(payload, "call", payload as CallRecord);
+    },
+
+    async end(callId: string): Promise<CallRecord> {
+      const payload = await request<unknown>(`/calls/${callId}/end`, { method: "PUT" });
+
+      return one<CallRecord>(payload, "call", payload as CallRecord);
+    },
+
+    async get(callId: string): Promise<CallRecord> {
+      const payload = await request<unknown>(`/calls/${callId}`);
+
+      return one<CallRecord>(payload, "call", payload as CallRecord);
+    },
+
+    async list(): Promise<CallRecord[]> {
+      const payload = await request<unknown>("/calls");
+
+      return unwrap<CallRecord[]>(payload, "calls", []);
     },
   },
 

@@ -12,6 +12,8 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { NexusProvider } from "@/context/NexusContext";
+import { CallProvider } from "@/context/CallContext";
+import { CallOverlay } from "@/components/nexus/CallOverlay";
 import { Button } from "@/components/ui/button";
 
 function NotFoundComponent() {
@@ -114,7 +116,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <NexusProvider>
-        <Outlet />
+        <CallProvider>
+          <Outlet />
+          <CallOverlay />
+        </CallProvider>
       </NexusProvider>
     </QueryClientProvider>
   );
