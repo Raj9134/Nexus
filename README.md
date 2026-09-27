@@ -87,7 +87,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-25 tests across three files. They focus on the failures that a type check
+55 tests across six files. They focus on the failures that a type check
 cannot catch, because those were the ones that reached a browser:
 
 - `nexus-context.test.tsx` — hydration must never present the seed dataset as
@@ -99,6 +99,15 @@ cannot catch, because those were the ones that reached a browser:
 - `no-placeholder-data.test.ts` — scans the sources for text and expressions
   that stand in for state, e.g. a permanent "Raj is typing..." or a count
   hardcoded as `item === "backend" ? 3 : 1`.
+- `call-context.test.tsx` — the signalling payloads. `server.js` validates them
+  with `readText`, which rejects anything that is not a string, so sending
+  WebRTC objects instead of raw SDP is what previously made every call fail
+  with "Invalid WebRTC offer".
+- `callManager.test.ts` — peer connection and microphone lifecycle, including
+  that teardown stops every track.
+- `voice.test.tsx` — the recorder strips the codec suffix the backend's audio
+  filter rejects, reports a whole number of seconds, releases the microphone,
+  and the player fetches with the access token and revokes its object URL.
 
 The frontend is also checked by `tsc --noEmit` and `eslint .`. CI runs all
 four.

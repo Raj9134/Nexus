@@ -96,13 +96,27 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const fail = useCallback(
-    (reason: string) => {
-      setError(reason);
-      reset();
-    },
-    [reset],
-  );
+  const fail = useCallback((reason: string) => {
+    closeCall();
+
+    /*
+        Clear the call state without clearing the error. This used to call
+        reset(), which set the error and then nulled it on the next line, so a
+        failed call returned to idle having told the user nothing at all.
+      */
+    setPhase("idle");
+    setCall(null);
+    setPeerName("");
+    setStartedAt(null);
+    setMuted(false);
+    startedAtRef.current = null;
+
+    if (audioRef.current) {
+      audioRef.current.srcObject = null;
+    }
+
+    setError(reason);
+  }, []);
 
   /* Outbound: we are the caller, so we own the offer. */
   const makeOffer = useCallback(

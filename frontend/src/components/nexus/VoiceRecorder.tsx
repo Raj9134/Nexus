@@ -35,6 +35,7 @@ export function VoiceRecorder({
   const [sending, setSending] = useState(false);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const startedAtRef = useRef(0);
   const tickRef = useRef<number | null>(null);
@@ -46,7 +47,22 @@ export function VoiceRecorder({
     }
   }, []);
 
+  /*
+    Single teardown for the microphone. Both send and cancel replace
+    `recorder.onstop`, so the cleanup that was there when recording started
+    used to be discarded and the capture track stayed live: the browser kept
+    showing the recording indicator after a note was sent or thrown away.
+    Holding the stream here means every path releases it exactly once.
+  */
+  const releaseMicrophone = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
   useEffect(() => stopTimer, [stopTimer]);
+
+  // Unmounting mid-recording must not leave the microphone open.
+  useEffect(() => releaseMicrophone, [releaseMicrophone]);
 
   const start = useCallback(async () => {
     setError(null);
@@ -60,6 +76,8 @@ export function VoiceRecorder({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
 
+      streamRef.current = stream;
+
       chunksRef.current = [];
       startedAtRef.current = Date.now();
 
@@ -70,7 +88,7 @@ export function VoiceRecorder({
       };
 
       recorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
+        releaseMicrophone();
         stopTimer();
         setRecording(false);
       };
@@ -96,7 +114,7 @@ export function VoiceRecorder({
           : "Could not start recording",
       );
     }
-  }, [stopTimer]);
+  }, [releaseMicrophone, stopTimer]);
 
   const stopAndSend = useCallback(async () => {
     const recorder = recorderRef.current;
@@ -108,6 +126,8 @@ export function VoiceRecorder({
     const duration = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
 
     recorder.onstop = () => {
+      releaseMicrophone();
+
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
 
       void (async () => {
@@ -123,16 +143,17 @@ export function VoiceRecorder({
 
     recorder.stop();
     recorderRef.current = null;
-  }, [onSend]);
+  }, [onSend, releaseMicrophone]);
 
   const cancel = useCallback(() => {
     const recorder = recorderRef.current;
 
     if (recorder && recorder.state !== "inactive") {
-      recorder.onstop = () => {
-        recorder.stream.getTracks().forEach((track) => track.stop());
-      };
+      recorder.onstop = releaseMicrophone;
       recorder.stop();
+    } else {
+      // Already stopped, so onstop will not run for us.
+      releaseMicrophone();
     }
 
     recorderRef.current = null;
@@ -141,7 +162,7 @@ export function VoiceRecorder({
     setRecording(false);
     setElapsed(0);
     onCancel?.();
-  }, [onCancel, stopTimer]);
+  }, [onCancel, releaseMicrophone, stopTimer]);
 
   if (error) {
     return (
