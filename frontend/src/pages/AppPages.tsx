@@ -942,6 +942,9 @@ function MessagesPanel({
   const [peer, setPeer] = useState<User | null>(null);
   const [draft, setDraft] = useState("");
   const channelMessages = nexus.messages.filter((message) => message.channel === active);
+  const messagesIn = (name: string) =>
+    nexus.messages.filter((message) => message.channel === name).length;
+  const onlineCount = nexus.users.filter((user) => user.status === "Online").length;
   return (
     <div className={cn("grid gap-4", !embedded && "lg:grid-cols-[280px_minmax(0,1fr)_240px]")}>
       <Card className={cn(embedded && "hidden")}>
@@ -957,7 +960,16 @@ function MessagesPanel({
               )}
             >
               <span>#{item}</span>
-              <span>{item === "backend" ? 3 : 1}</span>
+              {/*
+                Was a hardcoded `item === "backend" ? 3 : 1`, so every channel
+                showed a fake count. The API has no per-channel unread endpoint,
+                so report the real message count for that channel.
+              */}
+              {messagesIn(item) > 0 ? (
+                <span className="rounded-full bg-secondary px-1.5 text-xs tabular-nums text-muted-foreground">
+                  {messagesIn(item)}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -988,7 +1000,10 @@ function MessagesPanel({
         <Card className="min-h-[650px] p-0">
           <div className="border-b border-border p-4">
             <h1 className="font-display text-xl font-semibold">#{active}</h1>
-            <p className="text-sm text-muted-foreground">36 members · 12 online</p>
+            <p className="text-sm text-muted-foreground">
+              {nexus.users.length} {nexus.users.length === 1 ? "member" : "members"} · {onlineCount}{" "}
+              online
+            </p>
           </div>
           <div className="nexus-scrollbar max-h-[460px] space-y-4 overflow-auto p-4">
             {channelMessages.map((message) => {
@@ -1017,7 +1032,16 @@ function MessagesPanel({
                 </div>
               );
             })}
-            <p className="text-sm text-primary">Raj is typing...</p>
+            {/*
+              Was a hardcoded "Raj is typing...". The server emits
+              userTyping/userStoppedTyping but nothing in the app subscribes, so
+              showing it permanently was a lie. An empty channel now says so.
+            */}
+            {channelMessages.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Nothing in #{active} yet. Say something.
+              </p>
+            ) : null}
           </div>
           <div className="border-t border-border p-4">
             <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2">

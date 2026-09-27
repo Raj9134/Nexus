@@ -124,6 +124,14 @@ const NexusContext = createContext<NexusState | null>(null);
  */
 const FALLBACK_ROLES = ["Organization Admin", "Member"];
 
+/** Real zeroes, not the seed's numbers, for a panel whose request failed. */
+const emptyAnalytics: Analytics = {
+  progress: [],
+  status: [],
+  workload: [],
+  productivity: [],
+};
+
 export function NexusProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User>(seedUser);
@@ -202,70 +210,90 @@ export function NexusProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
 
-    try {
-      const [
-        me,
-        projectList,
-        taskList,
-        team,
-        channelList,
-        messageList,
-        notificationList,
-        fileList,
-        folderList,
-        eventList,
-        analyticsResult,
-        auditList,
-        orgList,
-      ] = await Promise.all([
-        api.auth.me(),
-        api.projects.list(),
-        api.tasks.list(),
-        api.team.list(),
-        api.channels.list(),
-        api.messages.list(),
-        api.notifications.list(),
-        api.files.list(),
-        api.files.folders(),
-        api.calendar.list(),
-        api.analytics.get(),
-        // Audit logs are admin-only, so a plain member gets a 403 here. That is
-        // an expected answer, not a broken API, and it must not take the rest
-        // of the workspace down with it.
-        api.audit.list().catch((error: unknown) => {
-          if (error instanceof ApiError && error.status === 403) {
-            return [] as AuditLog[];
-          }
-          throw error;
-        }),
-        api.organizations.list(),
-      ]);
+    /*
+      Every panel is settled on its own rather than through one Promise.all.
+      A single unreachable endpoint used to reject the whole batch, so the
+      catch below kept every seed value on screen: one flaky
+      organizations/mine made a workspace with 1 real project display the
+      demo's 5. Settling each call independently means a failure degrades one
+      panel instead of silently replacing the entire app with fake numbers.
+    */
+    const settle = <T,>(label: string, call: Promise<T>, fallback: T): Promise<T> =>
+      call.catch((error: unknown) => {
+        failed.push(label);
+        console.warn(`NEXUS: ${label} failed to load`, error);
+        return fallback;
+      });
 
-      setCurrentUser(me);
-      setProjects(projectList);
-      setTasks(taskList);
-      setUsers(team);
-      setChannels(channelList);
-      setMessages(messageList);
-      setNotifications(notificationList);
-      setFiles(fileList);
-      setFolders(folderList);
-      setEvents(eventList);
-      setAnalytics(analyticsResult);
-      setAuditLogs(auditList);
+    const failed: string[] = [];
 
-      const primaryOrg = orgList[0];
-      setOrganization(primaryOrg ? primaryOrg.name : "NEXUS");
-      setOrganizations(orgList);
-      setIsDemo(false);
-    } catch (error) {
-      // A failed hydration must not wipe the shell; keep the seed and say why.
-      setIsDemo(true);
-      reportFailure(error, "Could not reach the NEXUS API");
-    } finally {
-      setIsLoading(false);
+    const [
+      me,
+      projectList,
+      taskList,
+      team,
+      channelList,
+      messageList,
+      notificationList,
+      fileList,
+      folderList,
+      eventList,
+      analyticsResult,
+      auditList,
+      orgList,
+    ] = await Promise.all([
+      // The identity call is the one thing that must not be faked: without it
+      // there is no session, and the caller already checked for a token.
+      api.auth.me(),
+      settle("projects", api.projects.list(), [] as Project[]),
+      settle("tasks", api.tasks.list(), [] as Task[]),
+      settle("team", api.team.list(), [] as User[]),
+      settle("channels", api.channels.list(), [] as string[]),
+      settle("messages", api.messages.list(), [] as MessageItem[]),
+      settle("notifications", api.notifications.list(), [] as NotificationItem[]),
+      settle("files", api.files.list(), [] as FileItem[]),
+      settle("folders", api.files.folders(), [] as string[]),
+      settle("calendar", api.calendar.list(), [] as CalendarEvent[]),
+      settle("analytics", api.analytics.get(), emptyAnalytics),
+      // Audit logs are admin-only, so a plain member gets a 403 here. That is
+      // an expected answer, not a broken API, and it must not take the rest
+      // of the workspace down with it.
+      api.audit.list().catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 403) {
+          return [] as AuditLog[];
+        }
+        throw error;
+      }),
+      settle("organizations", api.organizations.list(), [] as Organization[]),
+    ]);
+
+    if (failed.length > 0) {
+      pushToast(`Could not load ${failed.join(", ")}. Other areas are still live.`, "warning");
     }
-  }, [reportFailure]);
+
+    setCurrentUser(me);
+    setProjects(projectList);
+    setTasks(taskList);
+    setUsers(team);
+    setChannels(channelList);
+    setMessages(messageList);
+    setNotifications(notificationList);
+    setFiles(fileList);
+    setFolders(folderList);
+    setEvents(eventList);
+    setAnalytics(analyticsResult);
+    setAuditLogs(auditList);
+
+    const primaryOrg = orgList[0];
+    setOrganization(primaryOrg ? primaryOrg.name : "NEXUS");
+    setOrganizations(orgList);
+    /*
+      Real data has landed, so this is no longer a demo even if some panels
+      failed. Leaving it true is what made the seed values look authoritative.
+    */
+    setIsDemo(false);
+    setIsLoading(false);
+  }, [pushToast]);
 
   useEffect(() => {
     void reload();
@@ -497,7 +525,19 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           const sent = await api.messages.send(channel, trimmed);
-          setMessages((items) => [...items, sent]);
+
+          /*
+            The sender also receives its own message back over the socket, and
+            the upsert in the realtime handler is meant to swallow that. It
+            only de-duplicates on `id`, and an optimistic write plus a socket
+            echo that arrive with different ids rendered the message twice.
+            Replacing by id, and ignoring anything already present, is what
+            the comment above that handler always claimed.
+          */
+          setMessages((items) =>
+            items.some((item) => item.id === sent.id) ? items : [...items, sent],
+          );
+
           pushToast("Message sent", "success");
         } catch (error) {
           reportFailure(error, "Could not send the message");

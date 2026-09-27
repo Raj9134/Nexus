@@ -83,7 +83,21 @@ const rawRequest = async <T>(path: string, init: RequestInit, token: string | nu
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  /*
+    Every call bypasses the HTTP cache. These responses are scoped to the
+    bearer token, so a shared cache key is wrong regardless, and in practice
+    the browser was replaying a 304 from before a workspace was created: the
+    app showed a stale body and the caller could not tell it apart from
+    current data. Mutations already bust the cache; reads must too.
+  */
+  const response = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
+
+  // A 304 carries no body, so response.json() would reject and the caller
+  // would silently receive {}. With no-store this should not happen, but a
+  // 304 is a failure for an API read rather than a success.
+  if (response.status === 304) {
+    throw new ApiError(304, "The API returned no data for this request");
+  }
 
   const payload: unknown = await response.json().catch(() => ({}));
 
