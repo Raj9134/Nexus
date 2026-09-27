@@ -2,6 +2,18 @@ const mongoose = require("mongoose");
 const Call = require("../models/Call");
 const User = require("../models/User");
 const { createNotification } = require("../services/notificationService");
+const { isValidObjectId } = require("../services/permissionService");
+const { serializeCall } = require("../utils/serialize");
+
+/*
+    Every call response goes out through serializeCall, and always with both
+    parties populated. A freshly saved document still holds bare ObjectIds, so
+    without this the caller would get back a peer it cannot name.
+*/
+const withParties = (call) =>
+    Call.findById(call._id)
+        .populate("caller", "name email")
+        .populate("receiver", "name email");
 
 const createCall = async (req, res) => {
 
@@ -67,7 +79,7 @@ try {
 
         message: "Call created successfully",
 
-        call: call
+        call: serializeCall(await withParties(call))
 
     });
 
@@ -145,7 +157,7 @@ try {
 
         message: "Call accepted successfully",
 
-        call: call
+        call: serializeCall(await withParties(call))
 
     });
 
@@ -220,7 +232,7 @@ try {
 
         message: "Call rejected successfully",
 
-        call: call
+        call: serializeCall(await withParties(call))
 
     });
 
@@ -295,7 +307,7 @@ try {
 
         message: "Call marked as missed",
 
-        call: call
+        call: serializeCall(await withParties(call))
 
     });
 
@@ -379,7 +391,7 @@ try {
 
         message: "Call ended successfully",
 
-        call: call
+        call: serializeCall(await withParties(call))
 
     });
 
@@ -417,7 +429,7 @@ try {
 
         message: "Call history fetched successfully",
 
-        calls: calls
+        calls: calls.map(serializeCall)
 
     });
 
@@ -437,17 +449,19 @@ try {
 
 const getCallById = async (req, res) => {
 
-try {
+    try {
 
-    const { callId } = req.params;
+        const { callId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(callId)) {
+        // Matches getEvent: a GET for something that cannot exist is a 404,
+        // not a 400. Callers only ever send ids the socket handed them.
+        if (!isValidObjectId(callId)) {
 
-        return res.status(400).json({
-            message: "Invalid call ID"
-        });
+            return res.status(404).json({
+                message: "Call not found"
+            });
 
-    }
+        }
 
     const call = await Call.findById(callId)
         .populate("caller", "name email")
@@ -478,7 +492,7 @@ try {
 
         message: "Call fetched successfully",
 
-        call: call
+        call: serializeCall(call)
 
     });
 

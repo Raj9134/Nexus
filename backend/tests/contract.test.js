@@ -68,6 +68,9 @@ const NOTIFICATION = ["id", "title", "body", "category", "time", "read"];
 const EVENT = ["id", "title", "date", "time", "type", "attendees", "notes"];
 const AUDIT = ["id", "timestamp", "user", "action", "resource", "ip", "status", "detail"];
 
+const CALL_PARTY = ["id", "name", "email"];
+const CALL = ["id", "caller", "receiver", "status", "startedAt", "endedAt", "duration", "createdAt"];
+
 const report = () => {
     const passed = results.filter(Boolean).length;
     console.log(`\n===== ${passed}/${results.length} passed =====`);
@@ -350,6 +353,52 @@ values("MessageItem values (search)", searchMessagesRes.data.messages[0], ["id",
 
     check("empty search query -> 400", (await call("GET", "/search/users?q=", token)).status, 400);
     check("search regex injection is escaped", (await call("GET", "/search/users?q=.*", token)).status, 200);
+
+    // calls: full lifecycle, and every response must be contract-shaped
+    check("call with no receiver -> 400", (await call("POST", "/calls", token, {})).status, 400);
+    check("call with a bad receiver id -> 400", (await call("POST", "/calls", token, { receiver: "not-an-id" })).status, 400);
+    check("call to self -> 400", (await call("POST", "/calls", token, { receiver: owner.data.user.id })).status, 400);
+
+    const createdCall = await call("POST", "/calls", token, { receiver: mateId });
+    check("create call", createdCall.status, 201);
+    shape("Call contract", createdCall.data.call, CALL);
+    shape("Call caller reference", createdCall.data.call.caller, CALL_PARTY);
+    shape("Call receiver reference", createdCall.data.call.receiver, CALL_PARTY);
+    values("Call values", createdCall.data.call, ["id", "status"]);
+    // The create response used to hold bare ObjectIds, so the caller could not
+    // name the person it just rang.
+    values("Call party values", createdCall.data.call.receiver, ["id", "name", "email"]);
+    check("call never leaks _id", JSON.stringify(createdCall.data).includes("_id"), false);
+    check("new call starts as calling", createdCall.data.call.status, "calling");
+
+    const callId = createdCall.data.call.id;
+
+    check("only the receiver may accept", (await call("PUT", `/calls/${callId}/accept`, outsiderToken)).status, 403);
+    check("the receiver may accept", (await call("PUT", `/calls/${callId}/accept`, mateToken)).status, 200);
+    check("a call cannot be accepted twice", (await call("PUT", `/calls/${callId}/accept`, mateToken)).status, 400);
+
+    const fetchedCall = await call("GET", `/calls/${callId}`, token);
+    check("fetch call", fetchedCall.status, 200);
+    shape("Call contract (fetch)", fetchedCall.data.call, CALL);
+
+    const callHistory = await call("GET", "/calls", token);
+    check("call history", callHistory.status, 200);
+    check("history includes the new call", callHistory.data.calls.some((c) => c.id === callId), true);
+    shape("Call contract (history)", callHistory.data.calls[0], CALL);
+    check("history never leaks _id", JSON.stringify(callHistory.data).includes("_id"), false);
+
+    check("an outsider cannot end the call", (await call("PUT", `/calls/${callId}/end`, outsiderToken)).status, 403);
+    check("a participant may end the call", (await call("PUT", `/calls/${callId}/end`, token)).status, 200);
+    check("a call cannot be ended twice", (await call("PUT", `/calls/${callId}/end`, token)).status, 400);
+    check("GET /calls/bad-id -> 404 not 500", (await call("GET", "/calls/not-an-id", token)).status, 404);
+
+    const missedCall = await call("POST", "/calls", token, { receiver: mateId });
+    check("missed call marked", (await call("PUT", `/calls/${missedCall.data.call.id}/miss`, mateToken)).status, 200);
+    check("a missed call cannot be accepted", (await call("PUT", `/calls/${missedCall.data.call.id}/accept`, mateToken)).status, 400);
+
+    const rejectedCall = await call("POST", "/calls", token, { receiver: mateId });
+    check("call rejected", (await call("PUT", `/calls/${rejectedCall.data.call.id}/reject`, mateToken)).status, 200);
+    check("a rejected call cannot be accepted", (await call("PUT", `/calls/${rejectedCall.data.call.id}/accept`, mateToken)).status, 400);
 
     report();
 })().catch((error) => {

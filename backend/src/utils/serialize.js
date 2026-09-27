@@ -272,6 +272,41 @@ function serializeChannel(channel) {
     };
 }
 
+/*
+    A call's caller/receiver is a bare ObjectId right after a write and a
+    populated { _id, name, email } on a read, so both shapes have to collapse
+    into one reference. Otherwise the client cannot name the peer it just
+    called, because the create response carries ids only.
+*/
+function userRef(value) {
+    if (!value) {
+        return null;
+    }
+
+    return {
+        id: idOf(value),
+        name: nameOf(value),
+        email: (value && value.email) || ""
+    };
+}
+
+function serializeCall(call) {
+    if (!call) {
+        return null;
+    }
+
+    return {
+        id: idOf(call),
+        caller: userRef(call.caller),
+        receiver: userRef(call.receiver),
+        status: call.status || "calling",
+        startedAt: call.startedAt || null,
+        endedAt: call.endedAt || null,
+        duration: Number(call.duration) || 0,
+        createdAt: call.createdAt || null
+    };
+}
+
 module.exports = {
     idOf,
     nameOf,
@@ -287,5 +322,6 @@ module.exports = {
     serializeAuditLog,
     serializeActivity,
     serializeNotification,
-    serializeChannel
+    serializeChannel,
+    serializeCall
 };
