@@ -446,7 +446,10 @@ export const api = {
       return one<unknown>(payload, "organization", payload);
     },
 
-    async update(id: string, patch: { name?: string; description?: string }): Promise<Organization> {
+    async update(
+      id: string,
+      patch: { name?: string; description?: string },
+    ): Promise<Organization> {
       const payload = await request<unknown>(`/organizations/${id}`, {
         method: "PUT",
         body: patch,
@@ -815,7 +818,10 @@ export const api = {
     },
 
     /** Uploads and binds in one step. Exactly one of projectId/taskId. */
-    async attach(file: File, target: { projectId: string } | { taskId: string }): Promise<FileItem> {
+    async attach(
+      file: File,
+      target: { projectId: string } | { taskId: string },
+    ): Promise<FileItem> {
       const form = new FormData();
 
       form.append("file", file);
