@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        working-directory: backend
+        run: npm ci
+
+      - name: Wait for MongoDB
+        run: |
+          for i in $(seq 1 30); do
+            if nc -z localhost 27017; then echo "mongo is up"; exit 0; fi
+            sleep 2
+          done
+          echo "mongo never came up" && exit 1
+
+      # The suites in backend/tests drive a live server over HTTP rather than
+      # importing it, so it has to be listening before they start.
+      - name: Start the API
+        working-directory: backend
+        env:
+          MONGO_URI: mongodb://127.0.0.1:27017/nexus_test
+          JWT_SECRET: ci-secret-not-used-in-production-0123456789
+          NODE_ENV: test
+          PORT: "5000"
+        run: |
+          node server.js > server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/ > /dev/null; then echo "api is up"; exit 0; fi
+            sleep 2
+          done
+          echo "api never came up" && cat server.log && exit 1
+
+      - name: Contract, realtime and invitation suites
+        working-directory: backend
+        run: npm run test:all
+
+      - name: Upload the server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-server-log
+          path: backend/server.log
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: frontend
+        run: bunx tsc --noEmit
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+        env:
+          # Placeholders so the build does not depend on a real deployment.
+          VITE_API_URL: http://localhost:5000/api
