@@ -2,7 +2,7 @@ process.env.NODE_ENV = "test";
 
 /**
  * Contract test: asserts the backend responses match the frontend
- * source of truth in nexus-workspace-main/src/types/nexus.ts
+ * source of truth in frontend/src/types/nexus.ts
  *
  * Run against a live server + MongoDB:
  *   npm start

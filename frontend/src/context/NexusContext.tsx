@@ -20,7 +20,6 @@ import {
   messages as messageSeed,
   notifications as notificationSeed,
   projects as projectSeed,
-  roles,
   tasks as taskSeed,
   users as userSeed,
 } from "@/data/mockData";
@@ -115,6 +114,15 @@ interface NexusState {
 }
 
 const NexusContext = createContext<NexusState | null>(null);
+
+/**
+ * The backend stores exactly two roles (see the `role` enum in User.js), and
+ * serialize.js renders them as display labels. Deriving the list from the
+ * loaded team keeps Settings honest instead of advertising roles that cannot
+ * be assigned. Demo mode has no server roles to read, so it falls back to the
+ * two that exist.
+ */
+const FALLBACK_ROLES = ["Organization Admin", "Member"];
 
 export function NexusProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
@@ -499,6 +507,14 @@ export function NexusProvider({ children }: { children: ReactNode }) {
     [pushToast, reportFailure],
   );
 
+  const roles = useMemo<string[]>(() => {
+    const present = Array.from(
+      new Set(users.map((user) => user.role).filter((role): role is string => Boolean(role))),
+    );
+
+    return present.length > 0 ? present.sort() : FALLBACK_ROLES;
+  }, [users]);
+
   const value = useMemo<NexusState>(
     () => ({
       currentUser,
@@ -588,6 +604,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       projects,
       pushToast,
       reload,
+      roles,
       selectedAudit,
       selectedEvent,
       selectedFile,

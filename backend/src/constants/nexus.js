@@ -18,7 +18,12 @@ const DEFAULT_CHANNELS = ["general", "engineering", "backend", "frontend", "rand
 
 const FILE_FOLDERS = ["Engineering", "Design", "Documentation", "Reports"];
 
-const ROLES = ["SUPER ADMIN", "ORG ADMIN", "PROJECT MANAGER", "TEAM LEAD", "MEMBER", "GUEST"];
+/*
+    Roles are deliberately absent here. The only two the system has are the
+    `role` enums on the User and Invitation models ("admin" / "member"), and
+    serialize.js renders the display labels. An earlier copy of this file
+    listed six roles that nothing could ever assign.
+*/
 
 const LEGACY_TASK_STATUS = {
     pending: "Todo",
@@ -119,9 +124,8 @@ module.exports = {
     USER_STATUSES,
     WORKLOAD_LEVELS,
     DEFAULT_CHANNELS,
-    FILE_FOLDERS,
-    ROLES,
-    normalizeTaskStatus,
+  FILE_FOLDERS,
+  normalizeTaskStatus,
     normalizePriority,
     normalizeProjectStatus,
     normalizeNotificationCategory,
