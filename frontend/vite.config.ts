@@ -13,3 +13,7 @@ export default defineConfig({
     server: { entry: "server" },
   },
 });
+
+// Vitest has its own config (vitest.config.ts) rather than a `test` key here,
+// because this config's types only describe the TanStack Start options and the
+// SSR plugin stack is not wanted in a jsdom run anyway.

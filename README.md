@@ -78,8 +78,30 @@ npm run test:all          # contract, realtime, and invitation suites
 Individually: `npm test`, `npm run test:realtime`, `npm run test:invites`.
 `npm run test:e2e` drives a real browser and needs a running frontend too.
 
-There is no frontend test suite yet. The frontend is checked by
-`tsc --noEmit` and `eslint .`, which is what CI runs.
+### Frontend
+
+```sh
+cd frontend
+npm test              # or: bun run test
+npm run test:watch
+npm run test:coverage
+```
+
+25 tests across three files. They focus on the failures that a type check
+cannot catch, because those were the ones that reached a browser:
+
+- `nexus-context.test.tsx` — hydration must never present the seed dataset as
+  real. A workspace holding one project once rendered "5 projects, 72 tasks,
+  6 teammates" with a "Live" badge, because one unreachable endpoint rejected
+  a single `Promise.all` and the catch kept every placeholder number.
+- `api.test.ts` — token storage, the refresh-then-retry path, and that a 304 is
+  a failed read rather than an empty result.
+- `no-placeholder-data.test.ts` — scans the sources for text and expressions
+  that stand in for state, e.g. a permanent "Raj is typing..." or a count
+  hardcoded as `item === "backend" ? 3 : 1`.
+
+The frontend is also checked by `tsc --noEmit` and `eslint .`. CI runs all
+four.
 
 ## A note on roles
 

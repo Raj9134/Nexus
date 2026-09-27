@@ -144,7 +144,14 @@ export function LandingPage() {
                   <div className="rounded-md border border-border bg-elevated p-3">
                     <p className="text-xs text-muted-foreground">Team activity</p>
                     <p className="mt-2 text-sm text-foreground">Priya mentioned Raj in #backend</p>
-                    <p className="mt-1 text-xs text-primary">Raj is typing...</p>
+                    {/*
+                      This panel is an illustration on the marketing page, not a
+                      live feed. It used to read "Raj is typing..." in a fixed
+                      primary colour, which is indistinguishable from a real
+                      typing indicator for anyone who saw the app and the
+                      landing page side by side. Labelled as a sample instead.
+                    */}
+                    <p className="mt-1 text-xs text-muted-foreground">Sample activity</p>
                   </div>
                   <div className="rounded-md border border-border bg-elevated p-3">
                     <p className="text-xs text-muted-foreground">Notifications</p>
