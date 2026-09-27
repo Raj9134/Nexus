@@ -142,13 +142,21 @@ export function Badge({
   );
 }
 
-export function Avatar({ name, className }: { name: string; className?: string }) {
-  const initials = name
-    .split(" ")
-    .map((part) => part[0])
+/**
+ * First letters of each word, capped at two. A single-word name yields one
+ * letter, and an empty name yields an empty string rather than "undefined".
+ */
+export function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0] ?? "")
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+export function Avatar({ name, className }: { name: string; className?: string }) {
   return (
     <span
       className={cn(
@@ -156,7 +164,7 @@ export function Avatar({ name, className }: { name: string; className?: string }
         className,
       )}
     >
-      {initials}
+      {initials(name)}
     </span>
   );
 }

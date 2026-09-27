@@ -134,9 +134,21 @@ same-network and localhost calls. Two peers behind separate NATs need a TURN
 relay: set `VITE_TURN_URL`, and optionally `VITE_TURN_USERNAME` and
 `VITE_TURN_CREDENTIAL`, in `frontend/.env`.
 
+## Trying a call
+
+Calling needs two people in the same workspace, and a member cannot call
+themselves, so a single-account workspace will always show the button as
+"This is you". To test it, register a second account and send an invitation
+from the app: **Invite Member** in the sidebar, or `nexus.pushToast` reports
+how many went out. When the backend has no mail transport configured, the
+invitation response includes the tokens directly, so the acceptance step works
+without a mail server.
+
+The workspace switcher is hidden when a user has only one workspace, since a
+menu with a single entry cannot do anything.
+
 ## Layout notes
 
-`legacy-vite-frontend/` is the abandoned Vite scaffold that NEXUS replaced. It
-is kept only because it held the sole implementation of the calling UI, which
-has since been rewritten in TypeScript. Nothing depends on it and it can be
-deleted.
+The original Vite scaffold that NEXUS replaced has been deleted. It held an
+earlier copy of the calling UI, which is now written in TypeScript under
+`frontend/src/services/callManager.ts` and `frontend/src/context/CallContext.tsx`.

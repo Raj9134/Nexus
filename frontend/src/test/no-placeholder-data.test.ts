@@ -100,3 +100,52 @@ describe("seed data stays in the seed", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("the workspace switcher", () => {
+  /*
+    Found by signing in as a second account: the shell printed
+    "Raj's Organization" and listed three hardcoded names no matter who was
+    signed in, and clicking one only showed a "Switched to ..." toast while the
+    app carried on showing what it had already loaded.
+  */
+  const shell = read(join(SRC, "components", "nexus", "AppShell.tsx"));
+
+  it("renders the loaded workspace name, not a literal", () => {
+    expect(shell).toContain("{nexus.organization}");
+    expect(shell).not.toMatch(/Sandbox Workspace/);
+  });
+
+  it("lists the workspaces the user actually belongs to", () => {
+    expect(shell).toContain("nexus.organizations.map");
+  });
+
+  it("switches rather than only announcing the switch", () => {
+    // A toast is not a switch: the click has to change state.
+    expect(shell).toContain("nexus.switchOrganization(org.id)");
+    expect(shell).not.toContain("pushToast(`Switched to ${org}`");
+  });
+
+  it("offers no menu when there is only one workspace to switch between", () => {
+    // A dropdown with a single entry is a control that cannot do anything.
+    expect(shell).toMatch(/organizations\.length > 1/);
+  });
+});
+
+describe("the signed-in user", () => {
+  /*
+    The same shell rendered "Raj Kumar Mishra / Backend Developer" for whoever
+    was signed in, with a correct avatar right beside it, so a second user saw
+    their own initials above someone else's name.
+  */
+  const shell = read(join(SRC, "components", "nexus", "AppShell.tsx"));
+
+  it("names the signed-in user from state, not a literal", () => {
+    expect(shell).toContain("{nexus.currentUser.name}");
+    expect(shell).not.toMatch(/Raj Kumar Mishra/);
+  });
+
+  it("labels the signed-in user with their real role", () => {
+    expect(shell).toContain("{nexus.currentUser.role}");
+    expect(shell).not.toMatch(/Backend Developer/);
+  });
+});

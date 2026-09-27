@@ -57,7 +57,10 @@ import type {
 interface NexusState {
   currentUser: User;
   organization: string;
+  /** Null until hydration settles and the user has at least one workspace. */
+  organizationId: string | null;
   organizations: Organization[];
+  switchOrganization: (id: string) => void;
   users: User[];
   projects: Project[];
   tasks: Task[];
@@ -135,6 +138,7 @@ const emptyAnalytics: Analytics = {
 export function NexusProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User>(seedUser);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [organization, setOrganization] = useState("NEXUS Labs");
   // The whole list, so surfaces that manage access (invites, workspace switch)
   // can pick an organization instead of guessing the primary one.
@@ -286,6 +290,16 @@ export function NexusProvider({ children }: { children: ReactNode }) {
 
     const primaryOrg = orgList[0];
     setOrganization(primaryOrg ? primaryOrg.name : "NEXUS");
+    setOrganizationId((previous) => {
+      // Keep the user's choice across a reload, but never keep an id that is
+      // no longer one of theirs.
+      if (previous && orgList.some((org) => org.id === previous)) {
+        return previous;
+      }
+
+      return primaryOrg ? primaryOrg.id : null;
+    });
+
     setOrganizations(orgList);
     /*
       Real data has landed, so this is no longer a demo even if some panels
@@ -555,11 +569,34 @@ export function NexusProvider({ children }: { children: ReactNode }) {
     return present.length > 0 ? present.sort() : FALLBACK_ROLES;
   }, [users]);
 
+  /*
+    The switcher used to render a hardcoded list of three names and only push a
+    "Switched to ..." toast, so it looked like it worked while the app kept
+    showing whatever it had loaded. Only the id moves here; the panels reload
+    on the next hydration.
+  */
+  const switchOrganization = useCallback(
+    (id: string) => {
+      const target = organizations.find((org) => org.id === id);
+
+      if (!target) {
+        return;
+      }
+
+      setOrganizationId(target.id);
+      setOrganization(target.name);
+      pushToast(`Switched to ${target.name}`, "info");
+    },
+    [organizations, pushToast],
+  );
+
   const value = useMemo<NexusState>(
     () => ({
       currentUser,
       organization,
+      organizationId,
       organizations,
+      switchOrganization,
       users,
       projects,
       tasks,
@@ -640,6 +677,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       modal,
       notifications,
       organization,
+      organizationId,
       organizations,
       projects,
       pushToast,
@@ -652,6 +690,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       selectedUser,
       signOut,
       sidebarCollapsed,
+      switchOrganization,
       tasks,
       theme,
       toasts,

@@ -40,6 +40,7 @@ import {
   Badge,
   BrandMark,
   Drawer,
+  initials,
   Modal,
   SearchInput,
   SelectField,
@@ -122,28 +123,30 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
               aria-label="Switch organization"
             >
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
-                NL
+                {initials(nexus.organization)}
               </span>
               {!nexus.sidebarCollapsed ? (
                 <>
-                  <span className="min-w-0 flex-1 truncate">Raj's Organization</span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{nexus.organization}</span>
+                  {nexus.organizations.length > 1 ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : null}
                 </>
               ) : null}
             </button>
-            {orgOpen ? (
+            {orgOpen && nexus.organizations.length > 1 ? (
               <div className="surface-card absolute left-0 right-0 top-12 z-20 rounded-lg p-2">
-                {["NEXUS Labs", "Raj's Organization", "Sandbox Workspace"].map((org) => (
+                {nexus.organizations.map((org) => (
                   <button
-                    key={org}
+                    key={org.id}
                     type="button"
                     onClick={() => {
                       setOrgOpen(false);
-                      nexus.pushToast(`Switched to ${org}`, "info");
+                      nexus.switchOrganization(org.id);
                     }}
                     className="block w-full rounded-md px-3 py-2 text-left text-sm text-foreground transition hover:bg-muted"
                   >
-                    {org}
+                    {org.name}
                   </button>
                 ))}
               </div>
@@ -265,10 +268,10 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
               {!nexus.sidebarCollapsed ? (
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-foreground">
-                    Raj Kumar Mishra
+                    {nexus.currentUser.name}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    Backend Developer
+                    {nexus.currentUser.role}
                   </span>
                 </span>
               ) : null}
