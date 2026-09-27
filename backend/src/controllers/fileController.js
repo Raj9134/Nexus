@@ -20,9 +20,35 @@ const { createNotification } = require("../services/notificationService");
 
 const { listFiles, listFileFolders } = require("../services/workspaceService");
 
+const { resolveTaskId } = require("./taskController");
+
+const { serializeFile, nameOf } = require("../utils/serialize");
+
 const accessDeniedMessage = (status, notFound, forbidden) => {
     return status === 404 ? notFound : forbidden;
 };
+
+/*
+    Only GET /files went through serializeFile; every other file response
+    returned a raw Mongo document, so the same resource had two shapes
+    depending on the route (_id and originalName instead of id and name, a
+    numeric size instead of a formatted one). Every file now leaves through
+    here. `uploadedBy` is a bare id unless the query populated it.
+*/
+const toFileItem = (file) => serializeFile(file, nameOf(file.uploadedBy));
+
+const toFileItems = (files) => files.map(toFileItem);
+
+/*
+    A freshly created or fetched document still holds uploadedBy as an ObjectId,
+    and nameOf cannot read a name out of one, so `owner` would come back blank
+    on the single-file routes while the list routes filled it in. Re-reading
+    with the field populated keeps the shape identical everywhere.
+*/
+const withOwner = (file) =>
+    File.findById(file._id).populate("uploadedBy", "name email");
+
+const toOwnedFileItem = async (file) => toFileItem(await withOwner(file));
 
 const createFileRecord = async (multerFile, extra = {}) => {
     return File.create({
@@ -50,7 +76,7 @@ const uploadFile = async (req, res) => {
 
     return res.status(201).json({
         message: "File uploaded successfully",
-        file: file
+        file: await toOwnedFileItem(file)
     });
 
 };
@@ -203,11 +229,19 @@ const attachFile = async (req, res) => {
 
     } else {
 
-        if (!isValidObjectId(taskId)) {
+        /*
+            Every other task route accepts the NEX key the tasks API hands out
+            (GET /tasks/NEX-208). Requiring a raw ObjectId here made task
+            attachments unreachable, because the serialized task never exposes
+            one. resolveTaskId takes either form.
+        */
+        const resolved = await resolveTaskId(taskId);
+
+        if (!resolved) {
             return reject(400, "Invalid task ID");
         }
 
-        access = await checkTaskAccess(taskId, req.userId);
+        access = await checkTaskAccess(resolved, req.userId);
 
         if (!access.allowed) {
             return reject(
@@ -235,7 +269,7 @@ const attachFile = async (req, res) => {
 
         return res.status(201).json({
             message: "File attached successfully",
-            file: file
+            file: await toOwnedFileItem(file)
         });
 
     } catch (error) {
@@ -270,16 +304,19 @@ const getProjectFiles = async (req, res) => {
         .populate("uploadedBy", "name email")
         .sort({ createdAt: -1 });
 
-    return res.status(200).json({
-        files: files
-    });
+        return res.status(200).json({
+            files: toFileItems(files)
+        });
 
 };
 
 const getTaskFiles = async (req, res) => {
 
+    // Accepts the NEX key as well as an ObjectId, like every other task route.
+    const taskId = await resolveTaskId(req.params.taskId);
+
     const access = await checkTaskAccess(
-        req.params.taskId,
+        taskId,
         req.userId
     );
 
@@ -299,9 +336,9 @@ const getTaskFiles = async (req, res) => {
         .populate("uploadedBy", "name email")
         .sort({ createdAt: -1 });
 
-    return res.status(200).json({
-        files: files
-    });
+        return res.status(200).json({
+            files: toFileItems(files)
+        });
 
 };
 
@@ -335,12 +372,12 @@ const getFile = async (req, res) => {
         });
     }
 
-    const file = await File.findById(access.file._id)
-        .populate("uploadedBy", "name email");
+      const file = await File.findById(access.file._id)
+          .populate("uploadedBy", "name email");
 
-    return res.status(200).json({
-        file: file
-    });
+      return res.status(200).json({
+          file: toFileItem(file)
+      });
 
 };
 

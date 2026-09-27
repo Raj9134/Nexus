@@ -173,8 +173,16 @@ export interface CallParty {
   email: string;
 }
 
-export type CallStatus = "calling" | "accepted" | "rejected" | "ended" | "missed";
+/** A channel with its full record, as /channels/records returns it. */
+export interface ChannelRecord {
+  id: string;
+  name: string;
+  description: string;
+  isPrivate: boolean;
+  members: string[];
+}
 
+export type CallStatus = "calling" | "accepted" | "rejected" | "ended" | "missed";
 export interface CallRecord {
   id: string;
   caller: CallParty;

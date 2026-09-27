@@ -3,6 +3,7 @@ import type {
   AuditLog,
   CalendarEvent,
   CallRecord,
+  ChannelRecord,
   FileItem,
   MessageItem,
   NotificationItem,
@@ -395,6 +396,23 @@ export const api = {
       return one<User>(payload, "user", payload as User);
     },
 
+    /**
+     * The current identity with live task counts. Unlike /auth/me this also
+     * returns the name and email at the top level.
+     */
+    async profile(): Promise<{ name: string; email: string; user: User }> {
+      const payload = await request<{ name: string; email: string; user: User }>("/auth/profile");
+
+      return payload;
+    },
+
+    /** Admin only: every user in the caller's organizations. Answers 403 otherwise. */
+    async users(): Promise<User[]> {
+      const payload = await request<unknown>("/auth/users");
+
+      return unwrap<User[]>(payload, "users", []);
+    },
+
     async updateProfile(patch: {
       name?: string;
       department?: string;
@@ -426,6 +444,40 @@ export const api = {
       });
 
       return one<unknown>(payload, "organization", payload);
+    },
+
+    async update(id: string, patch: { name?: string; description?: string }): Promise<Organization> {
+      const payload = await request<unknown>(`/organizations/${id}`, {
+        method: "PUT",
+        body: patch,
+      });
+
+      return one<Organization>(payload, "organization", payload as Organization);
+    },
+
+    async remove(id: string): Promise<void> {
+      await request<unknown>(`/organizations/${id}`, { method: "DELETE" });
+    },
+
+    async addMember(
+      id: string,
+      userId: string,
+      role: "admin" | "member" = "member",
+    ): Promise<Organization> {
+      const payload = await request<unknown>(`/organizations/${id}/members`, {
+        method: "POST",
+        body: { userId, role },
+      });
+
+      return one<Organization>(payload, "organization", payload as Organization);
+    },
+
+    async removeMember(id: string, userId: string): Promise<Organization> {
+      const payload = await request<unknown>(`/organizations/${id}/members/${userId}`, {
+        method: "DELETE",
+      });
+
+      return one<Organization>(payload, "organization", payload as Organization);
     },
   },
 
@@ -607,6 +659,68 @@ export const api = {
     async remove(id: string): Promise<void> {
       await request<unknown>(`/messages/${id}`, { method: "DELETE" });
     },
+
+    /** Direct-message history with one person, oldest first. */
+    async conversation(userId: string): Promise<MessageItem[]> {
+      const payload = await request<unknown>(`/messages/${userId}`);
+
+      return unwrap<MessageItem[]>(payload, "messages", []);
+    },
+
+    /** Channel messages are not tracked per user; the backend rejects this. */
+    async markRead(id: string): Promise<void> {
+      await request<unknown>(`/messages/${id}/read`, { method: "PUT" });
+    },
+
+    /**
+     * `duration` is required by the backend and must be a positive number of
+     * seconds, so the recorder has to measure it rather than the server
+     * guessing from the file.
+     */
+    async sendVoice(input: {
+      audio: Blob;
+      duration: number;
+      receiver?: string;
+      channel?: string;
+    }): Promise<MessageItem> {
+      const form = new FormData();
+
+      form.append("audio", input.audio, "voice-message");
+      form.append("duration", String(input.duration));
+
+      if (input.receiver) {
+        form.append("receiver", input.receiver);
+      }
+
+      if (input.channel) {
+        form.append("channel", input.channel);
+      }
+
+      const payload = await rawRequest<unknown>(
+        "/messages/voice",
+        { method: "POST", body: form },
+        readStorage(ACCESS_TOKEN_KEY),
+      );
+
+      return one<MessageItem>(payload, "voiceMessage", payload as MessageItem);
+    },
+
+    /**
+     * The audio endpoint needs the Authorization header, so a bare `src` on an
+     * <audio> element would 401. Fetch it and hand back an object URL, which
+     * the caller must revoke.
+     */
+    async voiceObjectUrl(messageId: string): Promise<string> {
+      const response = await fetch(`${API_BASE}/messages/voice/${messageId}`, {
+        headers: { Authorization: `Bearer ${readStorage(ACCESS_TOKEN_KEY) ?? ""}` },
+      });
+
+      if (!response.ok) {
+        throw new ApiError(response.status, "Could not load the voice message");
+      }
+
+      return URL.createObjectURL(await response.blob());
+    },
   },
 
   channels: {
@@ -614,6 +728,36 @@ export const api = {
       const payload = await request<unknown>("/channels");
 
       return unwrap<string[]>(payload, "channels", []);
+    },
+
+    /** Full channel records, including description, privacy and members. */
+    async records(): Promise<ChannelRecord[]> {
+      const payload = await request<unknown>("/channels/records");
+
+      return unwrap<ChannelRecord[]>(payload, "channels", []);
+    },
+
+    async create(input: {
+      name: string;
+      organizationId: string;
+      description?: string;
+      isPrivate?: boolean;
+    }): Promise<ChannelRecord> {
+      const payload = await request<unknown>("/channels", {
+        method: "POST",
+        body: {
+          name: input.name,
+          organizationId: input.organizationId,
+          description: input.description ?? "",
+          isPrivate: input.isPrivate ?? false,
+        },
+      });
+
+      return one<ChannelRecord>(payload, "channel", payload as ChannelRecord);
+    },
+
+    async remove(name: string): Promise<void> {
+      await request<unknown>(`/channels/${encodeURIComponent(name)}`, { method: "DELETE" });
     },
   },
 
@@ -652,18 +796,14 @@ export const api = {
       return unwrap<string[]>(payload, "folders", []);
     },
 
-    async upload(file: File, meta: { project?: string; task?: string } = {}): Promise<FileItem> {
+    /**
+     * A loose upload into the file library. The backend ignores any project or
+     * task field here, so associating a file with one is `attach`'s job.
+     */
+    async upload(file: File): Promise<FileItem> {
       const form = new FormData();
 
       form.append("file", file);
-
-      if (meta.project) {
-        form.append("project", meta.project);
-      }
-
-      if (meta.task) {
-        form.append("task", meta.task);
-      }
 
       const payload = await rawRequest<unknown>(
         "/files/upload",
@@ -672,6 +812,55 @@ export const api = {
       );
 
       return one<FileItem>(payload, "file", payload as FileItem);
+    },
+
+    /** Uploads and binds in one step. Exactly one of projectId/taskId. */
+    async attach(file: File, target: { projectId: string } | { taskId: string }): Promise<FileItem> {
+      const form = new FormData();
+
+      form.append("file", file);
+
+      if ("projectId" in target) {
+        form.append("projectId", target.projectId);
+      } else {
+        form.append("taskId", target.taskId);
+      }
+
+      const payload = await rawRequest<unknown>(
+        "/files/attach",
+        { method: "POST", body: form },
+        readStorage(ACCESS_TOKEN_KEY),
+      );
+
+      return one<FileItem>(payload, "file", payload as FileItem);
+    },
+
+    async forProject(projectId: string): Promise<FileItem[]> {
+      const payload = await request<unknown>(`/files/project/${projectId}`);
+
+      return unwrap<FileItem[]>(payload, "files", []);
+    },
+
+    async forTask(taskId: string): Promise<FileItem[]> {
+      const payload = await request<unknown>(`/files/task/${taskId}`);
+
+      return unwrap<FileItem[]>(payload, "files", []);
+    },
+
+    /** Sends a file as a direct message. Answers with the message, not the file. */
+    async sendAsMessage(file: File, receiverId: string): Promise<MessageItem> {
+      const form = new FormData();
+
+      form.append("file", file);
+      form.append("receiver", receiverId);
+
+      const payload = await rawRequest<unknown>(
+        "/files/message",
+        { method: "POST", body: form },
+        readStorage(ACCESS_TOKEN_KEY),
+      );
+
+      return one<MessageItem>(payload, "data", payload as MessageItem);
     },
 
     async download(id: string, filename: string): Promise<void> {

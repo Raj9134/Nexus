@@ -27,6 +27,33 @@ const call = async (method, path, token, body) => {
 const stamp = Date.now();
 const results = [];
 
+/** Multipart sibling of call(), for the upload and attach routes. */
+const callForm = async (method, path, token, form) => {
+    const res = await fetch(BASE + path, {
+        method,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form
+    });
+
+    return { status: res.status, data: await res.json().catch(() => ({})) };
+};
+
+const uploadForm = (fields) => {
+    const form = new FormData();
+
+    for (const [key, value] of Object.entries(fields)) {
+        if (value instanceof Blob) {
+            form.append(key, value, "contract-probe.txt");
+        } else {
+            form.append(key, String(value));
+        }
+    }
+
+    return form;
+};
+
+const probeFile = () => new Blob(["contract probe"], { type: "text/plain" });
+
 const check = (label, actual, expected) => {
     const pass = actual === expected;
     results.push(pass);
@@ -301,6 +328,69 @@ const report = () => {
         shape("FileItem contract", files.data.files[0], FILE);
     }
     check("GET /files/folders", (await call("GET", "/files/folders", token)).status, 200);
+
+    /*
+        Only GET /files went through serializeFile. The single-file and
+        sub-resource routes returned raw Mongo documents, so the same resource
+        had two shapes depending on the path.
+    */
+    const uploaded = await callForm("POST", "/files/upload", token, uploadForm({ file: probeFile() }));
+    check("POST /files/upload", uploaded.status, 201);
+    shape("FileItem contract (upload)", uploaded.data.file, FILE);
+    values("FileItem values (upload)", uploaded.data.file, ["id", "name", "owner", "size", "modified"]);
+    check("upload never leaks _id", JSON.stringify(uploaded.data).includes("_id"), false);
+
+    const uploadedId = uploaded.data.file.id;
+
+    const fetchedFile = await call("GET", `/files/${uploadedId}`, token);
+    check("GET /files/:fileId", fetchedFile.status, 200);
+    shape("FileItem contract (fetch)", fetchedFile.data.file, FILE);
+    values("FileItem values (fetch)", fetchedFile.data.file, ["id", "name", "owner"]);
+
+    const attached = await callForm("POST", "/files/attach", token, uploadForm({
+        file: probeFile(),
+        projectId
+    }));
+    check("POST /files/attach (project)", attached.status, 201);
+    shape("FileItem contract (attach)", attached.data.file, FILE);
+    values("FileItem values (attach)", attached.data.file, ["id", "name", "owner"]);
+
+    check("attach to a project and a task -> 400", (await callForm("POST", "/files/attach", token, uploadForm({
+        file: probeFile(),
+        projectId,
+        taskId: "NEX-1"
+    }))).status, 400);
+    check("attach to neither -> 400", (await callForm("POST", "/files/attach", token, uploadForm({
+        file: probeFile()
+    }))).status, 400);
+    check("attach with no file -> 400", (await callForm("POST", "/files/attach", token, uploadForm({
+        projectId
+    }))).status, 400);
+
+    const projectFiles = await call("GET", `/files/project/${projectId}`, token);
+    check("GET /files/project/:projectId", projectFiles.status, 200);
+    check("project files is array", Array.isArray(projectFiles.data.files), true);
+    if (projectFiles.data.files.length) {
+        shape("FileItem contract (project files)", projectFiles.data.files[0], FILE);
+        values("FileItem values (project files)", projectFiles.data.files[0], ["id", "name", "owner"]);
+    }
+    check("project files never leak _id", JSON.stringify(projectFiles.data).includes("_id"), false);
+
+    check("GET /files/task/:taskId for a stranger", (await call("GET", `/files/task/${task.id}`, outsiderToken)).status, 403);
+    const taskFiles = await call("GET", `/files/task/${task.id}`, token);
+    check("GET /files/task/:taskId accepts the NEX key", taskFiles.status, 200);
+    check("task files is array", Array.isArray(taskFiles.data.files), true);
+
+    const taskAttached = await callForm("POST", "/files/attach", token, uploadForm({
+        file: probeFile(),
+        taskId: task.id
+    }));
+    check("POST /files/attach (task, by NEX key)", taskAttached.status, 201);
+    shape("FileItem contract (attach to task)", taskAttached.data.file, FILE);
+    const taskFilesAfter = await call("GET", `/files/task/${task.id}`, token);
+    check("the task now lists the file", taskFilesAfter.data.files.length > taskFiles.data.files.length, true);
+    shape("FileItem contract (task files)", taskFilesAfter.data.files[0], FILE);
+    values("FileItem values (task files)", taskFilesAfter.data.files[0], ["id", "name", "owner"]);
 
     // notifications
     const notifications = await call("GET", "/notifications", token);
