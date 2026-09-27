@@ -90,6 +90,13 @@ export interface MessageItem {
   time: string;
   reactions: string[];
   edited?: boolean;
+  /** A voice or file message has an empty body and carries its payload here. */
+  messageType?: "text" | "voice" | "file";
+  /** Server path to the audio, present only on voice messages. */
+  audioUrl?: string | null;
+  /** Seconds, present only on voice messages. */
+  duration?: number | null;
+  fileId?: string | null;
 }
 
 export interface FileItem {

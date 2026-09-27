@@ -178,7 +178,18 @@ function serializeMessage(message, authorName) {
         body: message.message || "",
         time: clockTime(message.createdAt),
         reactions: message.reactions || [],
-        edited: Boolean(message.isEdited)
+        edited: Boolean(message.isEdited),
+        /*
+            Without these a voice or file message serialized to an empty body
+            with nothing marking it as one, so a client could neither render a
+            player nor fetch the audio.
+        */
+        messageType: message.messageType || "text",
+        audioUrl: message.audioUrl || null,
+        duration: message.duration === null || message.duration === undefined
+            ? null
+            : Number(message.duration),
+        fileId: message.file ? idOf(message.file) : null
     };
 }
 

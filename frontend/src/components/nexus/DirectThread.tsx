@@ -11,6 +11,8 @@ import {
 } from "@/components/nexus/primitives";
 import { Button } from "@/components/ui/button";
 import { useNexus } from "@/context/NexusContext";
+import { VoicePlayer } from "@/components/nexus/VoicePlayer";
+import { VoiceRecorder, type VoiceRecording } from "@/components/nexus/VoiceRecorder";
 import { api, isAuthenticated } from "@/services/api";
 import type { MessageItem, User } from "@/types/nexus";
 
@@ -80,6 +82,26 @@ export function DirectThread({ peer }: { peer: User }) {
     }
   }, [draft, nexus, peer.id, sending]);
 
+  const sendVoice = useCallback(
+    async (recording: VoiceRecording) => {
+      try {
+        const sent = await api.messages.sendVoice({
+          audio: recording.blob,
+          duration: recording.duration,
+          receiver: peer.id,
+        });
+
+        setMessages((items) => [...items, sent]);
+      } catch (caught) {
+        nexus.pushToast(
+          caught instanceof Error ? caught.message : "Could not send the voice message",
+          "error",
+        );
+      }
+    },
+    [nexus, peer.id],
+  );
+
   return (
     <Card className="flex min-h-[560px] flex-col p-0">
       <header className="flex items-center gap-3 border-b border-border p-4">
@@ -125,7 +147,11 @@ export function DirectThread({ peer }: { peer: User }) {
                       : "max-w-[75%] rounded-lg rounded-bl-sm bg-secondary px-3 py-2 text-sm text-foreground"
                   }
                 >
-                  <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                  {message.messageType === "voice" ? (
+                    <VoicePlayer messageId={message.id} seconds={message.duration ?? null} />
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                  )}
                   <span
                     className={
                       mine
@@ -166,6 +192,7 @@ export function DirectThread({ peer }: { peer: User }) {
           <Button type="button" size="icon" variant="ghost" aria-label="Attach a file" disabled>
             <Paperclip />
           </Button>
+          <VoiceRecorder onSend={sendVoice} disabled={!live} />
           <Button type="submit" size="icon" disabled={!draft.trim() || sending}>
             <Send />
           </Button>

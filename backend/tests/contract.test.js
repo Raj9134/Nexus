@@ -54,6 +54,37 @@ const uploadForm = (fields) => {
 
 const probeFile = () => new Blob(["contract probe"], { type: "text/plain" });
 
+/*
+    A minimal but genuinely valid 8-bit mono WAV: 44-byte header plus 8000
+    samples of silence at 8kHz, which is exactly one second. The audio filter
+    matches the content type against a fixed list, so a real file is needed;
+    random bytes are rejected.
+*/
+const probeWav = () => {
+    const header = [
+        0x52, 0x49, 0x46, 0x46, 0x68, 0x1f, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+        0x66, 0x74, 0x73, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+        0x40, 0x1f, 0x00, 0x00, 0x40, 0x1f, 0x00, 0x00, 0x01, 0x00, 0x08, 0x00,
+        0x64, 0x61, 0x74, 0x61, 0x40, 0x1f, 0x00, 0x00,
+    ];
+
+    return new Blob([header, new Uint8Array(8000).fill(128)], { type: "audio/wav" });
+};
+
+const audioForm = (fields) => {
+    const form = new FormData();
+
+    for (const [key, value] of Object.entries(fields)) {
+        if (value instanceof Blob) {
+            form.append(key, value, key === "audio" ? "probe.wav" : "contract-probe.txt");
+        } else {
+            form.append(key, String(value));
+        }
+    }
+
+    return form;
+};
+
 const check = (label, actual, expected) => {
     const pass = actual === expected;
     results.push(pass);
@@ -89,7 +120,7 @@ const values = (label, object, keys) => {
 const USER = ["id", "name", "email", "role", "department", "avatar", "status", "activeTasks", "completed", "workload", "projects", "completionRate"];
 const PROJECT = ["id", "name", "key", "description", "progress", "members", "tasks", "completed", "due", "status", "icon"];
 const TASK = ["id", "title", "description", "projectId", "project", "priority", "status", "assigneeId", "assignee", "reporter", "dueDate", "labels", "comments", "attachments", "checklist", "activity"];
-const MESSAGE = ["id", "channel", "authorId", "body", "time", "reactions", "edited"];
+const MESSAGE = ["id", "channel", "authorId", "body", "time", "reactions", "edited", "messageType", "audioUrl", "duration", "fileId"];
 const FILE = ["id", "name", "type", "owner", "size", "modified", "folder"];
 const NOTIFICATION = ["id", "title", "body", "category", "time", "read"];
 const EVENT = ["id", "title", "date", "time", "type", "attendees", "notes"];
@@ -275,11 +306,64 @@ const report = () => {
     check("GET /messages?channel", listed.status, 200);
     check("channel message listed", listed.data.messages.some((m) => m.body === "hello team"), true);
 
-    check("message with no target -> 400", (await call("POST", "/messages", token, { message: "orphan" })).status, 400);
-    check("empty message -> 400", (await call("POST", "/messages", token, { channel: "general", message: "   " })).status, 400);
+    check("message with no target -> 400", (await call("POST", "/messages", token, { message: "orphan" })).status, 400);    check("empty message -> 400", (await call("POST", "/messages", token, { channel: "general", message: "   " })).status, 400);
     check("unknown channel -> 404", (await call("POST", "/messages", token, { channel: "no-such-channel", message: "x" })).status, 404);
     check("self DM -> 400", (await call("POST", "/messages", token, { receiver: owner.data.user.id, message: "self" })).status, 400);
     check("DM to org mate ok", (await call("POST", "/messages", token, { receiver: mateId, message: "dm" })).status, 201);
+
+    /*
+        A voice message used to serialize to an empty body with no marker, so
+        a client could not tell it apart from a text message and had nothing to
+        fetch the audio from.
+    */
+    check("voice message with no duration -> 400", (await callForm("POST", "/messages/voice", token, audioForm({
+        audio: probeWav(),
+        receiver: mateId
+    }))).status, 400);
+    check("voice message with no target -> 400", (await callForm("POST", "/messages/voice", token, audioForm({
+        audio: probeWav(),
+        duration: 1
+    }))).status, 400);
+    check("voice message to self -> 400", (await callForm("POST", "/messages/voice", token, audioForm({
+        audio: probeWav(),
+        duration: 1,
+        receiver: owner.data.user.id
+    }))).status, 400);
+    check("voice message over the cap -> 400", (await callForm("POST", "/messages/voice", token, audioForm({
+        audio: probeWav(),
+        duration: 99999,
+        receiver: mateId
+    }))).status, 400);
+    check("voice message with a non-audio file -> 400", (await callForm("POST", "/messages/voice", token, audioForm({
+        audio: probeFile(),
+        duration: 1,
+        receiver: mateId
+    }))).status, 400);
+
+    const voice = await callForm("POST", "/messages/voice", token, audioForm({
+        audio: probeWav(),
+        duration: 1,
+        receiver: mateId
+    }));
+    check("create voice message", voice.status, 201);
+    shape("MessageItem contract (voice)", voice.data.voiceMessage, MESSAGE);
+    check("a voice message is typed as one", voice.data.voiceMessage.messageType, "voice");
+    check("a voice message carries an audio url", typeof voice.data.voiceMessage.audioUrl, "string");
+    check("a voice message carries its duration", voice.data.voiceMessage.duration, 1);
+    check("a voice message has an empty body", voice.data.voiceMessage.body, "");
+
+    const voiceStream = await fetch(`${BASE}/messages/voice/${voice.data.voiceMessage.id}`, {
+        headers: { Authorization: `Bearer ${mateToken}` },
+    });
+    check("the recipient can stream the audio", voiceStream.status, 200);
+    check("the stream is audio", String(voiceStream.headers.get("content-type")).startsWith("audio/"), true);
+    check("a stranger cannot stream the audio", (await fetch(`${BASE}/messages/voice/${voice.data.voiceMessage.id}`, {
+        headers: { Authorization: `Bearer ${outsiderToken}` },
+    })).status, 403);
+
+    const voiceHistory = await call("GET", `/messages/${owner.data.user.id}`, mateToken);
+    check("the voice message is in the DM history", voiceHistory.data.messages.some((m) => m.id === voice.data.voiceMessage.id), true);
+    check("and it is still typed as voice", voiceHistory.data.messages.find((m) => m.id === voice.data.voiceMessage.id).messageType, "voice");
 
     const editDenied = await call("PATCH", `/messages/${post.data.data.id}`, outsiderToken, { message: "hacked" });
     check("edit other user's message -> 403", editDenied.status, 403);
