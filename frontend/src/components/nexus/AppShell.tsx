@@ -1,4 +1,4 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
   CalendarDays,
@@ -24,6 +24,7 @@ import {
   X,
   BarChart3,
   ClipboardList,
+  LogOut,
   Phone,
   Upload,
 } from "lucide-react";
@@ -1115,6 +1116,7 @@ function TaskDetailDrawer() {
 
 function MemberDrawer() {
   const nexus = useNexus();
+  const navigate = useNavigate();
   const user = nexus.selectedUser;
   const { startCall, phase } = useCall();
   if (!user) return null;
@@ -1143,7 +1145,10 @@ function MemberDrawer() {
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => nexus.pushToast(`Opened a chat with ${user.name}`)}
+            onClick={() => {
+              nexus.closeUser();
+              void navigate({ to: "/messages", search: { peer: user.id } });
+            }}
             disabled={isSelf}
           >
             <MessageSquare />
@@ -1181,6 +1186,18 @@ function MemberDrawer() {
               </button>
             ))}
         </div>
+        {/*
+          Sign out. signOut existed in the context the whole time and was never
+          called from anywhere, so there was no way to end a session from the
+          app at all. It lives on your own profile, which is where people look
+          for it, and is not shown on someone else's.
+        */}
+        {isSelf ? (
+          <Button variant="outline" className="w-full" onClick={() => void nexus.signOut()}>
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </Button>
+        ) : null}
       </div>
     </Drawer>
   );

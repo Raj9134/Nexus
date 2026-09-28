@@ -5,7 +5,19 @@ import { useEffect, useState } from "react";
 import { Avatar, Badge, BrandMark, Card, ProgressBar } from "@/components/nexus/primitives";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { api, AUTHENTICATED_EVENT, isAuthenticated } from "@/services/api";
+import {
+  api,
+  AUTHENTICATED_EVENT,
+  isAuthenticated,
+  readRemember,
+  /*
+    Aliased on purpose. Naming the state setter `setRemember` shadowed the
+    storage writer of the same name, so `setRemember(remember)` in submit was
+    setting React state and nothing ever reached localStorage. Both take a
+    boolean, so neither tsc nor eslint noticed.
+  */
+  setRemember as setRememberPreference,
+} from "@/services/api";
 import type { Organization, Project } from "@/types/nexus";
 
 export type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
@@ -25,10 +37,20 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [devToken, setDevToken] = useState<string | null>(null);
-  const [email, setEmail] = useState("raj@nexuslabs.dev");
-  const [password, setPassword] = useState("demo-password");
-  const [name, setName] = useState("Raj Kumar Mishra");
+  /*
+    Empty by default. The form used to ship pre-filled with a real account's
+    address and "demo-password", so anyone who opened the login page was shown
+    working credentials for someone else's workspace, and pressing Sign in just
+    produced "Invalid email or password".
+  */
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  // Remember me now decides where the tokens are stored. It had no state at all
+  // and both tokens always went to localStorage, so the label promised
+  // something the code never did.
+  const [remember, setRemember] = useState(() => readRemember());
   // Reset and verification links carry ?token=...; there is no mail provider in
   // local dev, so the token can also be pasted in. Reading it in an effect keeps
   // the server render and the first client render identical, because window
@@ -63,6 +85,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
     try {
       if (mode === "login") {
+        // Set before the request, so the tokens land in the store the checkbox
+        // chose rather than wherever the previous session happened to be.
+        setRememberPreference(remember);
         await api.auth.login({ email, password });
         window.dispatchEvent(new Event(AUTHENTICATED_EVENT));
         await navigate({ to: "/app" });
@@ -257,7 +282,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               {mode === "login" ? (
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <label className="flex items-center gap-2 text-muted-foreground">
-                    <input type="checkbox" className="h-4 w-4 accent-primary" />
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={remember}
+                      onChange={(event) => setRemember(event.target.checked)}
+                    />
                     Remember me
                   </label>
                   <Link to="/forgot-password" className="text-primary hover:underline">

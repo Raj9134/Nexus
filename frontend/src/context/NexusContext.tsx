@@ -358,9 +358,15 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       setAnalytics(analyticsData);
       setChannels(channelSeed);
       setFolders(folderSeed);
+      // The workspace and the chosen organization were left behind, so the next
+      // person to sign in on a shared browser saw the previous one's name.
+      setOrganization("NEXUS Labs");
+      setOrganizationId(null);
+      setOrganizations([]);
       setIsDemo(true);
+      await navigate({ to: "/login" });
     }
-  }, []);
+  }, [navigate]);
 
   // Live updates. Every handler guards on !isDemo so demo data is never mixed
   // with server payloads, and each one de-duplicates against the local list

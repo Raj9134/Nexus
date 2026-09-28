@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, ApiError, isAuthenticated } from "@/services/api";
+import { api, ApiError, isAuthenticated, setRemember } from "@/services/api";
 
 /**
  * The API client is the only place the frontend decides what the server said.
@@ -35,7 +35,11 @@ const signIn = () => {
 };
 
 beforeEach(() => {
+  // Both stores, because a session lives in one or the other depending on
+  // whether Remember me was ticked, and a leftover in either would leak between
+  // tests.
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -68,7 +72,9 @@ describe("caching", () => {
 });
 
 describe("sessions", () => {
-  it("stores both tokens on login", async () => {
+  it("keeps the session in sessionStorage when Remember me is off", async () => {
+    setRemember(false);
+
     mockFetch(() =>
       jsonResponse(200, {
         message: "Login successful",
@@ -80,12 +86,59 @@ describe("sessions", () => {
 
     await api.auth.login({ email: "raj@example.com", password: "secret123" });
 
-    expect(window.localStorage.getItem("nexus.accessToken")).toBe("access-1");
-    expect(window.localStorage.getItem("nexus.refreshToken")).toBe("refresh-1");
+    // Closing the browser must end the session unless the user asked otherwise.
+    expect(window.sessionStorage.getItem("nexus.accessToken")).toBe("access-1");
+    expect(window.sessionStorage.getItem("nexus.refreshToken")).toBe("refresh-1");
+    expect(window.localStorage.getItem("nexus.accessToken")).toBeNull();
     expect(isAuthenticated()).toBe(true);
   });
 
-  it("clears both tokens on logout even if the request fails", async () => {
+  it("keeps the session in localStorage when Remember me is on", async () => {
+    setRemember(true);
+
+    mockFetch(() =>
+      jsonResponse(200, {
+        message: "Login successful",
+        token: "access-remembered",
+        refreshToken: "refresh-remembered",
+        user: { id: "u1", name: "Raj", email: "raj@example.com" },
+      }),
+    );
+
+    await api.auth.login({ email: "raj@example.com", password: "secret123" });
+
+    expect(window.localStorage.getItem("nexus.accessToken")).toBe("access-remembered");
+    expect(window.localStorage.getItem("nexus.refreshToken")).toBe("refresh-remembered");
+    // Never both, or the two stores could disagree about the current session.
+    expect(window.sessionStorage.getItem("nexus.accessToken")).toBeNull();
+    expect(isAuthenticated()).toBe(true);
+  });
+
+  it("drops a remembered session when Remember me is turned off", async () => {
+    setRemember(true);
+
+    mockFetch(() =>
+      jsonResponse(200, {
+        message: "Login successful",
+        token: "access-old",
+        refreshToken: "refresh-old",
+        user: { id: "u1", name: "Raj", email: "raj@example.com" },
+      }),
+    );
+
+    await api.auth.login({ email: "raj@example.com", password: "secret123" });
+    expect(window.localStorage.getItem("nexus.accessToken")).toBe("access-old");
+
+    // Unticking the box has to take effect now, not at the next sign-in, or a
+    // persistent session would outlive the choice the user just made.
+    setRemember(false);
+
+    expect(window.localStorage.getItem("nexus.accessToken")).toBeNull();
+    expect(window.localStorage.getItem("nexus.refreshToken")).toBeNull();
+  });
+
+  it("clears both stores on logout even if the request fails", async () => {
+    setRemember(true);
     signIn();
 
     mockFetch(() => {
@@ -100,6 +153,7 @@ describe("sessions", () => {
   });
 
   it("refreshes once and retries the original request after a 401", async () => {
+    setRemember(true);
     signIn();
 
     let projectCalls = 0;

@@ -91,7 +91,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-120 tests across seven files. They focus on the failures that a type check
+131 tests across seven files. They focus on the failures that a type check
 cannot catch, because those were the ones that reached a browser:
 
 - `nexus-context.test.tsx` — hydration must never present the seed dataset as
@@ -121,6 +121,28 @@ cannot catch, because those were the ones that reached a browser:
 
 The frontend is also checked by `tsc --noEmit` and `eslint .`. CI runs all
 four.
+
+## Signing in and out
+
+The login form starts empty. It used to ship pre-filled with a real account's
+address and `demo-password`, so anyone who opened the page was handed
+credentials for a real workspace.
+
+**Remember me** is real. Ticked, the tokens go to `localStorage` and the session
+survives closing the browser; unticked they go to `sessionStorage` and closing
+the browser ends it. The preference is kept in `nexus.remember` so the box comes
+back as you left it. Both stores are cleared on sign-out, and unticking the box
+takes effect immediately rather than at the next sign-in.
+
+**Sign out** is on your own profile, in the drawer behind the avatar. `signOut`
+existed in the context from the start and was called from nowhere, so there was
+no way to end a session from the app at all. It also clears the workspace name
+and the selected organization, which otherwise survived into the next session on
+a shared browser.
+
+A wrong password and an account that does not exist return the same
+`Invalid email or password`, so the form cannot be used to discover which
+addresses are registered.
 
 ## A note on roles
 

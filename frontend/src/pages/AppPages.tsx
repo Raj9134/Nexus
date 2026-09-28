@@ -1,4 +1,4 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
 import {
   Archive,
   BarChart3,
@@ -997,9 +997,30 @@ function MessagesPanel({
 }) {
   const nexus = useNexus();
   const [active, setActive] = useState(channel);
+  /*
+    Read ?peer= from the URL so a profile drawer can open the conversation with
+    that person. It used to show an "Opened a chat with ..." toast and select
+    nobody, so the Message button went nowhere. This router version has no
+    useSearchParams, but useLocation already carries a parsed search object.
+  */
+  const location = useLocation();
   const [peer, setPeer] = useState<User | null>(null);
   const [draft, setDraft] = useState("");
   const [sendingFile, setSendingFile] = useState(false);
+
+  const peerParam = typeof location.search?.peer === "string" ? location.search.peer : null;
+
+  useEffect(() => {
+    if (!peerParam) {
+      return;
+    }
+
+    const match = nexus.users.find((user) => user.id === peerParam);
+
+    if (match && match.id !== nexus.currentUser.id) {
+      setPeer(match);
+    }
+  }, [nexus.currentUser.id, nexus.users, peerParam]);
   const channelFileRef = useRef<HTMLInputElement>(null);
   const live = nexus.isDemo === false && isAuthenticated();
   const channelMessages = nexus.messages.filter((message) => message.channel === active);

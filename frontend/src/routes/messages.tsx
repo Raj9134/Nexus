@@ -7,6 +7,18 @@ export const Route = createFileRoute("/messages")({
   // The session lives in localStorage, so this page cannot be decided on the
   // server. Skip SSR and let the guard run in the browser.
   ssr: false,
+  /*
+    `peer` is how a profile drawer opens a conversation with one person. The
+    Message button used to show a toast and select nobody, so this is what makes
+    it go somewhere.
+  */
+  validateSearch: (search: Record<string, unknown>) => {
+    const peer = search["peer"];
+
+    return {
+      ...(typeof peer === "string" && peer.length > 0 ? { peer } : {}),
+    };
+  },
   head: () => ({
     meta: [
       { title: "Messages â€” NEXUS" },

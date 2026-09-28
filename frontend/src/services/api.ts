@@ -40,26 +40,101 @@ export class ApiError extends Error {
   }
 }
 
-const readStorage = (key: string): string | null => {
+/*
+    Tokens live in localStorage when the user asked to be remembered and in
+    sessionStorage otherwise, so closing the browser ends the session unless they
+    ticked the box. Both are read, because a user who unticks the box still has
+    a session from a previous sign-in, and one store must not shadow the other.
+
+    The "Remember me" checkbox was present and did nothing: there was no state
+    behind it and both tokens always went to localStorage, so the label made a
+    promise the code did not keep.
+*/
+const REMEMBER_KEY = "nexus.remember";
+
+const stores = (): Storage[] => {
+  const found: Storage[] = [];
+
   try {
-    return window.localStorage.getItem(key);
+    found.push(window.localStorage);
   } catch {
-    return null;
+    /* storage unavailable (private mode / disabled cookies) */
   }
+
+  try {
+    found.push(window.sessionStorage);
+  } catch {
+    /* ignore */
+  }
+
+  return found;
+};
+
+const readStorage = (key: string): string | null => {
+  for (const store of stores()) {
+    try {
+      const value = store.getItem(key);
+
+      if (value !== null) {
+        return value;
+      }
+    } catch {
+      /* try the next store */
+    }
+  }
+
+  return null;
 };
 
 const writeStorage = (key: string, value: string): void => {
+  const target = readRemember() ? window.localStorage : window.sessionStorage;
+  const other = readRemember() ? window.sessionStorage : window.localStorage;
+
   try {
-    window.localStorage.setItem(key, value);
+    target.setItem(key, value);
   } catch {
     /* storage unavailable (private mode / disabled cookies) */
+  }
+
+  // Cleared from the other store, so the two cannot hold different tokens for
+  // the same account after toggling the box.
+  try {
+    other.removeItem(key);
+  } catch {
+    /* ignore */
   }
 };
 
 const clearTokens = (): void => {
+  for (const store of stores()) {
+    for (const key of [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]) {
+      try {
+        store.removeItem(key);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+};
+
+export const readRemember = (): boolean => {
   try {
-    window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-    window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+    return window.localStorage.getItem(REMEMBER_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+/** Called from the sign-in form before the request, so the tokens land correctly. */
+export const setRemember = (remember: boolean): void => {
+  try {
+    window.localStorage.setItem(REMEMBER_KEY, String(remember));
+
+    if (!remember) {
+      // A previous persistent session must not outlive the choice just made.
+      window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+      window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+    }
   } catch {
     /* ignore */
   }

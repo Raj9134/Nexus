@@ -389,6 +389,73 @@ describe("the landing page", () => {
   });
 });
 
+describe("sign in", () => {
+  const auth = read(join(SRC, "pages", "AuthPages.tsx"));
+  const api = read(join(SRC, "services", "api.ts"));
+  const context = read(join(SRC, "context", "NexusContext.tsx"));
+  const shell = read(join(SRC, "components", "nexus", "AppShell.tsx"));
+
+  /*
+    The login form shipped pre-filled with raj@nexuslabs.dev and
+    "demo-password", so anyone opening the page was handed working credentials
+    for a real account on the developer's machine. Pressing Sign in then failed,
+    because that account's password had been changed to Nexus@2026.
+  */
+  it("ships with empty fields, not somebody's credentials", () => {
+    expect(auth).not.toMatch(/useState\("raj@nexuslabs\.dev"\)/);
+    expect(auth).not.toContain('"demo-password"');
+    expect(auth).toMatch(/const \[email, setEmail\] = useState\(""\)/);
+    expect(auth).toMatch(/const \[password, setPassword\] = useState\(""\)/);
+  });
+
+  /*
+    "Remember me" had no state and no handler, and both tokens always went to
+    localStorage, so the label promised a session that ended with the browser
+    and the app never provided.
+  */
+  it("has a Remember me checkbox that changes where tokens are stored", () => {
+    expect(auth).toMatch(/const \[remember, setRemember\] = useState/);
+    expect(auth).toContain("checked={remember}");
+    expect(auth).toContain("onChange={(event) => setRemember(event.target.checked)}");
+    expect(auth).toContain("setRememberPreference(remember)");
+    expect(api).toContain("window.sessionStorage");
+  });
+
+  /*
+    The state setter was named setRemember, which shadowed the imported storage
+    writer of the same name, so the call in submit set React state and nothing
+    reached localStorage. Both took a boolean, so tsc and eslint were both
+    satisfied. The import is aliased, and this asserts the call site uses the
+    alias.
+  */
+  it("does not let a state setter shadow the storage writer", () => {
+    expect(auth).toContain("setRemember as setRememberPreference");
+    expect(auth).not.toMatch(/[^a-zA-Z]setRemember\((?!event\.target)/);
+  });
+
+  /*
+    signOut was defined in the context and called from nowhere, so there was no
+    way to end a session from the app at all. You could sign in and not sign out.
+  */
+  it("offers a way to sign out", () => {
+    expect(shell).toContain("nexus.signOut()");
+    expect(shell).toContain("Sign out");
+  });
+
+  it("clears the previous session on sign out, and leaves the page", () => {
+    expect(context).toContain('await navigate({ to: "/login" })');
+    // Otherwise the next person on a shared browser saw the last one's name.
+    expect(context).toContain("setOrganizationId(null)");
+    expect(context).toContain("setOrganizations([])");
+  });
+
+  it("does not reveal whether an account exists", () => {
+    // The backend answers both cases identically; asserted in the contract
+    // suite. This guards the page against ever rendering a different message.
+    expect(auth).not.toMatch(/no account|not found|does not exist|Unknown email/i);
+  });
+});
+
 describe("task assignment", () => {
   /*
     The task drawer's Assign button pushed a toast that said "Assign menu
