@@ -110,24 +110,90 @@
 }
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes shimmer {
-  0% { background-position: -700px 0; }
-  100% { background-position: 700px 0; }
+  0% {
+    background-position: -700px 0;
+  }
+  100% {
+    background-position: 700px 0;
+  }
+}
+
+/*
+  The three people in the NEXUS mark orbit clockwise around the verified
+  centre. A positive angle is clockwise in SVG's y-down coordinates, so this
+  goes 0 -> 360 rather than the other way round.
+
+  transform-origin is set in viewBox units with transform-box: view-box, because
+  on an SVG child a bare percentage would resolve against the element's own
+  bounding box rather than the 64x56 canvas the nodes are positioned in.
+*/
+@keyframes nexus-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.nexus-orbit {
+  transform-box: view-box;
+  transform-origin: 32px 32px;
+  animation: nexus-orbit 18s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexus-orbit {
+    animation: none;
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 24%, transparent); }
-  50% { box-shadow: 0 0 0 8px color-mix(in oklab, var(--primary) 0%, transparent); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 24%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in oklab, var(--primary) 0%, transparent);
+  }
 }
 
 @utility surface-card {
-  background: linear-gradient(180deg, color-mix(in oklab, var(--card) 94%, white 2%), var(--card));
+  /* Glass, so the HUD reads through every card. The previous fill was opaque,
+     which hid the artwork entirely. Border and inset highlight are unchanged,
+     which is what keeps the cyan edge reading against the darker fill.
+
+     The blur is set below, outside @utility on purpose. Inside one, the build
+     emitted only -webkit-backdrop-filter, and Chrome reads that back as "none",
+     so the cards had no blur at all despite the declaration being present. */
+  background: rgba(7, 13, 20, 0.72);
   border: 1px solid var(--border);
-  box-shadow: 0 18px 50px -36px color-mix(in oklab, var(--primary) 32%, black), inset 0 1px 0 color-mix(in oklab, white 8%, transparent);
+  box-shadow:
+    0 18px 50px -36px color-mix(in oklab, var(--primary) 32%, black),
+    inset 0 1px 0 color-mix(in oklab, white 8%, transparent);
+}
+
+/*
+  Plain rules, not @utility. Declaring backdrop-filter inside @utility left the
+  build emitting only -webkit-backdrop-filter, which Chrome reads back as "none"
+  -- and for surface-panel the property was dropped from the output entirely.
+  Declaring the standard property alone here lets the build add the prefix
+  itself and keep both.
+*/
+.surface-card,
+.nexus-glass {
+  backdrop-filter: blur(10px);
 }
 
 @utility surface-panel {
@@ -137,7 +203,12 @@
 }
 
 @utility glow-line {
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--primary) 62%, transparent), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--primary) 62%, transparent),
+    transparent
+  );
 }
 
 @utility premium-focus {
@@ -146,48 +217,127 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
-  html { background: var(--color-background); }
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    background: var(--color-background);
+  }
   body {
     min-width: 320px;
     background:
-      radial-gradient(circle at 18% -12%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 34rem),
-      radial-gradient(circle at 82% 8%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 28rem),
+      radial-gradient(
+        circle at 18% -12%,
+        color-mix(in oklab, var(--primary) 16%, transparent),
+        transparent 34rem
+      ),
+      radial-gradient(
+        circle at 82% 8%,
+        color-mix(in oklab, var(--accent) 10%, transparent),
+        transparent 28rem
+      ),
       var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-body);
     letter-spacing: 0;
   }
-  button, input, select, textarea { font: inherit; }
-  ::selection { background: color-mix(in oklab, var(--primary) 42%, transparent); color: var(--color-foreground); }
-  *:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 42%, transparent);
+    color: var(--color-foreground);
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
-  .nexus-scrollbar { scrollbar-color: color-mix(in oklab, var(--muted-foreground) 34%, transparent) transparent; scrollbar-width: thin; }
-  .nexus-skeleton { background: linear-gradient(90deg, var(--muted), color-mix(in oklab, var(--muted) 62%, var(--foreground) 7%), var(--muted)); background-size: 700px 100%; animation: shimmer 1.5s infinite linear; }
-  .nexus-enter { animation: fade-up 0.35s ease both; }
-  .nexus-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
+  .nexus-scrollbar {
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 34%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+  .nexus-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--muted),
+      color-mix(in oklab, var(--muted) 62%, var(--foreground) 7%),
+      var(--muted)
+    );
+    background-size: 700px 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+  .nexus-enter {
+    animation: fade-up 0.35s ease both;
+  }
+  .nexus-glow {
+    animation: pulse-glow 2.5s ease-in-out infinite;
+  }
 
   /*
-    The artwork is a fixed layer behind everything rather than a background on
-    <body>, so it does not scroll away and does not repaint with the content.
+    The HUD artwork is a fixed layer behind everything rather than a background
+    on <body>, so it does not scroll away and does not repaint with the content.
     `cover` matches the SVG's own preserveAspectRatio="xMidYMid slice", so it
-    fills any viewport without letterboxing. Faded well down, because the panels
-    and the sidebar are semi-transparent and anything stronger fights the text.
+    fills any viewport without letterboxing.
   */
   .nexus-backdrop {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background-image: url("/nexus-bg.svg");
+    background-color: #04080f;
+    background-image: url("/nexus-jarvis-background.svg");
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+    background-attachment: fixed;
     opacity: 0.5;
   }
 
+  /*
+    SMIL runs inside a CSS background-image, and no CSS rule can pause it. So
+    reduced motion is handled by swapping the file, not by stopping the
+    animation: a separate static copy with the same artwork and no animate
+    elements.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    .nexus-backdrop {
+      background-image: url("/nexus-jarvis-background-static.svg");
+    }
+  }
+
+  /*
+    The dashboard is dense with figures, so the HUD is pulled back there to
+    keep the numbers legible. :has() means no component has to know about it.
+  */
+  body:has(.nexus-dashboard) .nexus-backdrop {
+    opacity: 0.6;
+  }
+
+  /*
+    Glass for the shell and the cards, so the HUD shows through rather than
+    being hidden behind an opaque surface. The borders stay as they were, which
+    is what keeps the cyan edge against the darker fill.
+  */
+  .nexus-glass {
+    background: rgba(7, 13, 20, 0.72);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nexus-enter,
+    .nexus-glow {
+      animation: none;
+    }
+  }
+
   /* Holds the layers apart, so content is not painted under the artwork. */
-  .nexus-backdrop-root { position: relative; z-index: 1; }
+  .nexus-backdrop-root {
+    position: relative;
+    z-index: 1;
+  }
 }

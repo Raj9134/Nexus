@@ -503,6 +503,46 @@ describe("the brand mark", () => {
     expect(primitives).toMatch(/<circle cx="32" cy="32" r="14"/);
   });
 
+  /*
+    The three people orbit clockwise. The connecting triangle has to rotate
+    with them, or the frame would sit still while the nodes slid off its ends,
+    so both live inside the one rotating group and the centre stays outside it.
+  */
+  it("orbits the people and their frame clockwise, leaving the centre still", () => {
+    const orbitAt = primitives.indexOf("nexus-orbit");
+    const linesAt = primitives.indexOf("M32 9 14 45M32 9l18 36M14 45h36");
+    const peopleAt = primitives.indexOf('fill="#12876f"');
+    const hubAt = primitives.indexOf('<circle cx="32" cy="32" r="14"');
+
+    expect(orbitAt).toBeGreaterThan(-1);
+    expect(linesAt).toBeGreaterThan(orbitAt);
+    expect(peopleAt).toBeGreaterThan(linesAt);
+
+    /*
+      The orbit group has to close before the hub, or the hub would rotate too
+      and the mark would lose the fixed point it is built around.
+    */
+    const orbitClose = primitives.indexOf("</g>", peopleAt);
+
+    expect(orbitClose).toBeGreaterThan(-1);
+    expect(hubAt, "the verified centre must stay outside the rotating group").toBeGreaterThan(
+      orbitClose,
+    );
+  });
+
+  it("rotates clockwise about the centre, and stops for reduced motion", () => {
+    const styles = read(join(SRC, "styles.css"));
+
+    // A positive angle is clockwise in SVG's y-down coordinates.
+    expect(styles).toMatch(/@keyframes nexus-orbit[\s\S]*?rotate\(0deg\)[\s\S]*?rotate\(360deg\)/);
+    // viewBox units, or a percentage would resolve against the node's own box.
+    expect(styles).toContain("transform-origin: 32px 32px");
+    expect(styles).toMatch(/\.nexus-orbit\s*\{[^}]*transform-box: view-box/);
+    expect(styles).toMatch(
+      /prefers-reduced-motion: reduce[\s\S]*?\.nexus-orbit\s*\{\s*animation: none/,
+    );
+  });
+
   it("is the favicon, ahead of the legacy .ico", () => {
     const svgIndex = root.indexOf("/nexus-mark.svg");
     const icoIndex = root.indexOf("/favicon.ico");

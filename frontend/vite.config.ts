@@ -12,6 +12,18 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+
+  /*
+    The shared config defaults to the Cloudflare Workers preset, which produces a
+    wrangler bundle rather than a server. That is the wrong shape for Railway,
+    where a Node service expects a process to start and a port to listen on.
+
+    The preset is only forced to cloudflare-module inside Lovable's own build
+    sandbox, so setting it here is honoured on a normal `npm run build`.
+  */
+  nitro: {
+    preset: "node-server",
+  },
 });
 
 // Vitest has its own config (vitest.config.ts) rather than a `test` key here,

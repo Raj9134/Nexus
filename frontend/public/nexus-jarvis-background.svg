@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" role="img" aria-label="">
+  <!--
+    NEXUS HUD backdrop. Animated: used as a CSS background-image, where SMIL
+    still runs. The static sibling is nexus-jarvis-background-static.svg, which
+    is the same artwork with the animate elements removed, because CSS cannot
+    pause SMIL on its own.
+
+    No filter primitives anywhere in here. The animated layers use radial
+    gradients for their glow instead, because a feGaussianBlur on a full
+    viewport element has to be re-rasterised on every frame as it rotates.
+  -->
+  <defs>
+    <radialGradient id="base" cx="72%" cy="48%" r="85%">
+      <stop offset="0" stop-color="#0A1A24"/>
+      <stop offset="0.4" stop-color="#061019"/>
+      <stop offset="1" stop-color="#04080F"/>
+    </radialGradient>
+
+    <radialGradient id="coreGlow">
+      <stop offset="0" stop-color="#00D4E8" stop-opacity="0.95"/>
+      <stop offset="0.18" stop-color="#00D4E8" stop-opacity="0.45"/>
+      <stop offset="0.45" stop-color="#0092B8" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#00D4E8" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="sweepFade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#00D4E8" stop-opacity="0.5"/>
+      <stop offset="0.7" stop-color="#00D4E8" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#00D4E8" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="scanFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00D4E8" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#00D4E8" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#00D4E8" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="ringFade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00D4E8" stop-opacity="0.85"/>
+      <stop offset="0.5" stop-color="#00D4E8" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#00D4E8" stop-opacity="0.7"/>
+    </linearGradient>
+
+    <radialGradient id="vignette" cx="50%" cy="50%" r="72%">
+      <stop offset="0.55" stop-color="#04080F" stop-opacity="0"/>
+      <stop offset="1" stop-color="#04080F" stop-opacity="0.85"/>
+    </radialGradient>
+
+    <!-- Hex tile: pointy-top hexagon, circumradius 14. -->
+    <path id="hex" d="M0 -14 L12.12 -7 L12.12 7 L0 14 L-12.12 7 L-12.12 -7 Z"/>
+
+    <pattern id="hexGrid" width="48.5" height="42" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#00D4E8" stroke-width="1">
+        <use href="#hex" x="12.12" y="10.5"/>
+        <use href="#hex" x="36.37" y="31.5"/>
+        <use href="#hex" x="12.12" y="-31.5"/>
+        <use href="#hex" x="36.37" y="-10.5"/>
+        <use href="#hex" x="-12.12" y="10.5"/>
+        <use href="#hex" x="12.12" y="52.5"/>
+        <use href="#hex" x="-36.37" y="31.5"/>
+        <use href="#hex" x="12.12" y="73.5"/>
+      </g>
+    </pattern>
+
+    <!-- The grid is only visible near the reactor, so it reads as a HUD field
+         rather than wallpaper. -->
+    <mask id="gridMask">
+      <rect width="1920" height="1080" fill="url(#gridMaskGrad)"/>
+    </mask>
+    <radialGradient id="gridMaskGrad" cx="72%" cy="48%" r="52%">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#base)"/>
+
+  <!-- masked hex grid -->
+  <g mask="url(#gridMask)" opacity="0.5">
+    <rect width="1920" height="1080" fill="url(#hexGrid)"/>
+  </g>
+
+  <!-- reactor glow, sitting under everything else at the core -->
+  <circle cx="1380" cy="520" r="520" fill="url(#coreGlow)" opacity="0.35">
+    <animate attributeName="opacity" values="0.28;0.42;0.28" dur="7s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- concentric rotating rings, centre-right -->
+  <g fill="none" transform-origin="1380 520">
+    <circle cx="1380" cy="520" r="150" stroke="url(#ringFade)" stroke-width="1.6"
+            stroke-dasharray="34 18 6 18">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="0 1380 520" to="360 1380 520" dur="26s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1380" cy="520" r="235" stroke="#00D4E8" stroke-width="1.2" opacity="0.6"
+            stroke-dasharray="10 14 60 14">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="360 1380 520" to="0 1380 520" dur="40s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1380" cy="520" r="330" stroke="#00D4E8" stroke-width="1" opacity="0.42"
+            stroke-dasharray="120 30 8 30">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="0 1380 520" to="360 1380 520" dur="64s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1380" cy="520" r="425" stroke="#00D4E8" stroke-width="0.9" opacity="0.26"
+            stroke-dasharray="4 22">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="0 1380 520" to="-360 1380 520" dur="96s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- reactor arc segments, counter-rotating against the rings -->
+  <g fill="none" stroke="#00D4E8" stroke-width="2" stroke-linecap="round" opacity="0.55">
+    <path d="M1380 268 A252 252 0 0 1 1632 394">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="0 1380 520" to="360 1380 520" dur="34s" repeatCount="indefinite"/>
+    </path>
+    <path d="M1128 646 A252 252 0 0 1 1380 772">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="0 1380 520" to="-360 1380 520" dur="34s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- radar sweep -->
+  <g transform-origin="1380 520">
+    <path d="M1380 520 L1380 95 A425 425 0 0 1 1665 195 Z" fill="url(#sweepFade)" opacity="0.5">
+      <animateTransform attributeName="transform" type="rotate"
+                        from="0 1380 520" to="360 1380 520" dur="9s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- pulsing core -->
+  <circle cx="1380" cy="520" r="70" fill="url(#coreGlow)">
+    <animate attributeName="r" values="62;78;62" dur="5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="1380" cy="520" r="26" fill="#00D4E8" opacity="0.9">
+    <animate attributeName="opacity" values="0.7;1;0.7" dur="3.2s" repeatCount="indefinite"/>
+    <animate attributeName="r" values="23;29;23" dur="3.2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="1380" cy="520" r="9" fill="#CFFBFF" opacity="0.95">
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- vertical scan line sweeping across the viewport -->
+  <g>
+    <rect x="-60" y="0" width="120" height="1080" fill="url(#scanFade)">
+      <animateTransform attributeName="transform" type="translate"
+                        values="0 0;1980 0" dur="14s" repeatCount="indefinite"/>
+    </rect>
+    <line x1="0" y1="0" x2="0" y2="1080" stroke="#00D4E8" stroke-width="1" opacity="0.35">
+      <animateTransform attributeName="transform" type="translate"
+                        values="0 0;1980 0" dur="14s" repeatCount="indefinite"/>
+    </line>
+  </g>
+
+  <!-- telemetry ticks along the base -->
+  <g stroke="#00D4E8" stroke-width="1" opacity="0.22">
+    <path d="M0 1040H1920"/>
+    <path d="M160 1020v40M480 1020v40M800 1020v40M1120 1020v40M1440 1020v40M1760 1020v40"
+          stroke-dasharray="2 6"/>
+  </g>
+
+  <!-- corner brackets -->
+  <g fill="none" stroke="#00D4E8" stroke-width="2" stroke-linecap="square" opacity="0.4">
+    <path d="M56 116V56h60"/>
+    <path d="M1864 56h-60v60"/>
+    <path d="M56 964v60h60"/>
+    <path d="M1804 1024h60v-60"/>
+  </g>
+
+  <!-- vignette, last so it darkens the edges of everything above it -->
+  <rect width="1920" height="1080" fill="url(#vignette)"/>
+</svg>

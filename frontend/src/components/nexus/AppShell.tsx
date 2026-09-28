@@ -93,7 +93,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden border-r border-border bg-panel/95 backdrop-blur-xl transition-all duration-300 lg:block",
+          "nexus-glass fixed inset-y-0 left-0 z-40 hidden border-r border-border transition-all duration-300 lg:block",
           nexus.sidebarCollapsed ? "w-20" : "w-72",
         )}
       >
@@ -287,7 +287,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
       <div
         className={cn("transition-all duration-300 lg:pl-72", nexus.sidebarCollapsed && "lg:pl-20")}
       >
-        <header className="sticky top-0 z-30 border-b border-border bg-background/86 backdrop-blur-xl">
+        <header className="nexus-glass sticky top-0 z-30 border-b border-border">
           <div className="grid h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
             <button
               type="button"
@@ -366,7 +366,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
       </div>
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t border-border bg-background/92 px-2 py-2 backdrop-blur-xl lg:hidden"
+        className="nexus-glass fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t border-border px-2 py-2 lg:hidden"
         aria-label="Mobile navigation"
       >
         {[...mobileNav, { label: "Profile", href: "/settings", icon: Settings }].map((item) => {

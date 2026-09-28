@@ -91,7 +91,9 @@ export function DashboardPage() {
   const metrics = nexus.analytics.metrics;
   return (
     <AppShell title="Overview">
-      <div className="space-y-6">
+      {/* The class is only a hook: the stylesheet pulls the HUD back on any page
+          containing it, so nothing here has to know the backdrop exists. */}
+      <div className="nexus-dashboard space-y-6">
         <SectionHeader
           title="Good evening, Raj 👋"
           description="Here's what's happening across your workspace."

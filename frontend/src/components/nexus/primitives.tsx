@@ -44,16 +44,29 @@ export function NexusSymbol({
       fill="none"
     >
       {/*
-        The triangle runs between the three people and passes behind the centre,
-        which is why the nodes are drawn last.
+        The three nodes and the triangle that joins them orbit clockwise as one
+        piece. The lines have to rotate with the people, or the frame would stay
+        still while the nodes slid off the ends of it. The centre and its tick
+        stay put, which is what makes it read as the hub they are going round.
+
+        (32, 32) is the visual centre: it is where the blue disc is, and the
+        centroid of the three nodes is (32, 33).
       */}
-      <g
-        stroke="currentColor"
-        strokeWidth="1"
-        strokeLinecap="round"
-        className="text-muted-foreground/40"
-      >
-        <path d="M32 9 14 45M32 9l18 36M14 45h36" />
+      <g className="nexus-orbit">
+        <g
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinecap="round"
+          className="text-muted-foreground/40"
+        >
+          <path d="M32 9 14 45M32 9l18 36M14 45h36" />
+        </g>
+
+        <g fill="#12876f" fillRule="evenodd">
+          <path d={person} transform="translate(32 9)" />
+          <path d={person} transform="translate(14 45)" />
+          <path d={person} transform="translate(50 45)" />
+        </g>
       </g>
 
       <circle cx="32" cy="32" r="14" fill="#1a56a8" />
@@ -64,12 +77,6 @@ export function NexusSymbol({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-
-      <g fill="#12876f" fillRule="evenodd">
-        <path d={person} transform="translate(32 9)" />
-        <path d={person} transform="translate(14 45)" />
-        <path d={person} transform="translate(50 45)" />
-      </g>
     </svg>
   );
 }
