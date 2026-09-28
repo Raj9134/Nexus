@@ -110,7 +110,14 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        {/*
+          One fixed layer behind every route, rather than a background on each
+          page, so the artwork is declared once and never scrolls away. It is
+          aria-hidden and inert: the CSS sets pointer-events none, and it carries
+          no information a screen reader should read out.
+        */}
+        <div className="nexus-backdrop" aria-hidden="true" />
+        <div className="nexus-backdrop-root">{children}</div>
         <Scripts />
       </body>
     </html>

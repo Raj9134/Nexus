@@ -168,4 +168,26 @@
   .nexus-skeleton { background: linear-gradient(90deg, var(--muted), color-mix(in oklab, var(--muted) 62%, var(--foreground) 7%), var(--muted)); background-size: 700px 100%; animation: shimmer 1.5s infinite linear; }
   .nexus-enter { animation: fade-up 0.35s ease both; }
   .nexus-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
+
+  /*
+    The artwork is a fixed layer behind everything rather than a background on
+    <body>, so it does not scroll away and does not repaint with the content.
+    `cover` matches the SVG's own preserveAspectRatio="xMidYMid slice", so it
+    fills any viewport without letterboxing. Faded well down, because the panels
+    and the sidebar are semi-transparent and anything stronger fights the text.
+  */
+  .nexus-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: url("/nexus-bg.svg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.5;
+  }
+
+  /* Holds the layers apart, so content is not painted under the artwork. */
+  .nexus-backdrop-root { position: relative; z-index: 1; }
 }
