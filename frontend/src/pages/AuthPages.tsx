@@ -173,7 +173,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             ))}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">NEXUS Labs · Enterprise Demo</p>
+        <p className="text-xs text-muted-foreground">NEXUS Labs · Raj Mishra</p>
       </section>
       <section className="flex items-center justify-center px-4 py-12 sm:px-8">
         <div className="w-full max-w-md nexus-enter">
