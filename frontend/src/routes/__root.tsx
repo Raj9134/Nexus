@@ -87,6 +87,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap",
       },
+      /*
+        The mark, then the legacy .ico for anything that still asks for it.
+        Browsers take the first icon they can render, so the SVG wins and the
+        ico is only a fallback.
+      */
+      { rel: "icon", href: "/nexus-mark.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/nexus-mark.svg" },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),

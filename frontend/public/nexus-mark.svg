@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 56" role="img" aria-label="NEXUS">
+  <title>NEXUS</title>
+  <!-- The triangle runs between the three people and passes behind the centre. -->
+  <g stroke="#5a6470" stroke-width="1" stroke-linecap="round" fill="none">
+    <path d="M32 9 14 45M32 9l18 36M14 45h36" />
+  </g>
+  <circle cx="32" cy="32" r="14" fill="#1a56a8" />
+  <path d="m27.2 32.2 4.2 4.3 7.4-8.6" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <!-- Head and shoulders are holes in each circle, via fill-rule="evenodd". -->
+  <g fill="#12876f" fill-rule="evenodd">
+    <path transform="translate(32 9)" d="M0-6a6 6 0 1 0 0 12 6 6 0 1 0 0-12ZM0-5.05a2.35 2.35 0 1 1 0 4.7 2.35 2.35 0 1 1 0-4.7ZM-4 2.6a4 3 0 0 1 8 0Z" />
+    <path transform="translate(14 45)" d="M0-6a6 6 0 1 0 0 12 6 6 0 1 0 0-12ZM0-5.05a2.35 2.35 0 1 1 0 4.7 2.35 2.35 0 1 1 0-4.7ZM-4 2.6a4 3 0 0 1 8 0Z" />
+    <path transform="translate(50 45)" d="M0-6a6 6 0 1 0 0 12 6 6 0 1 0 0-12ZM0-5.05a2.35 2.35 0 1 1 0 4.7 2.35 2.35 0 1 1 0-4.7ZM-4 2.6a4 3 0 0 1 8 0Z" />
+  </g>
+</svg>

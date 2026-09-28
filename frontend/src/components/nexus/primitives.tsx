@@ -5,12 +5,84 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+/**
+ * The NEXUS mark: three people around one verified centre.
+ *
+ * Drawn inline rather than shipped as a bitmap so it stays sharp at any size
+ * and so the connecting lines can inherit the text colour, which is what lets
+ * one mark read on both the dark and the light background instead of carrying a
+ * baked-in backdrop.
+ *
+ * The people are one path per node with `fill-rule="evenodd"`, so the head and
+ * shoulders are holes in the circle rather than shapes painted on top in a
+ * second colour. Painting them would need to know the background, and this
+ * mark sits on cards, sidebars and the landing page.
+ */
+export function NexusSymbol({
+  className,
+  title = "NEXUS",
+}: {
+  className?: string;
+  title?: string;
+}) {
+  /*
+    One person, drawn about its own origin so the same path is reused for all
+    three nodes. The head and the shoulders are subpaths of the same outline and
+    rely on fill-rule="evenodd" to become holes.
+  */
+  const person =
+    "M0-6a6 6 0 1 0 0 12 6 6 0 1 0 0-12Z" +
+    "M0-5.05a2.35 2.35 0 1 1 0 4.7 2.35 2.35 0 1 1 0-4.7Z" +
+    "M-4 2.6a4 3 0 0 1 8 0Z";
+
+  return (
+    <svg
+      viewBox="0 0 64 56"
+      role="img"
+      aria-label={title}
+      className={cn("shrink-0", className)}
+      fill="none"
+    >
+      {/*
+        The triangle runs between the three people and passes behind the centre,
+        which is why the nodes are drawn last.
+      */}
+      <g
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+        className="text-muted-foreground/40"
+      >
+        <path d="M32 9 14 45M32 9l18 36M14 45h36" />
+      </g>
+
+      <circle cx="32" cy="32" r="14" fill="#1a56a8" />
+      <path
+        d="m27.2 32.2 4.2 4.3 7.4-8.6"
+        stroke="#fff"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      <g fill="#12876f" fillRule="evenodd">
+        <path d={person} transform="translate(32 9)" />
+        <path d={person} transform="translate(14 45)" />
+        <path d={person} transform="translate(50 45)" />
+      </g>
+    </svg>
+  );
+}
+
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <Link to="/" className="group flex min-w-0 items-center gap-3" aria-label="NEXUS home">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground shadow-[0_0_30px_color-mix(in_oklab,var(--primary)_28%,transparent)] transition-transform group-hover:scale-105">
-        NX
-      </span>
+      {/*
+        44px, not the 36px the old "NX" badge used. The mark carries three
+        people and a tick, and at 36px the head-and-shoulder cutouts collapse
+        into noise. 44px is the smallest size where the shape still reads.
+      */}
+      <NexusSymbol className="h-11 w-auto drop-shadow-[0_0_14px_rgba(26,86,168,0.4)] transition-transform group-hover:scale-105" />
       {!compact ? (
         <span className="min-w-0">
           <span className="block truncate font-display text-base font-semibold tracking-normal text-foreground">

@@ -233,3 +233,38 @@ describe("file controls", () => {
     expect(shell).toContain("api.files.upload(uploadSelection, uploadFolder)");
   });
 });
+
+describe("the brand mark", () => {
+  const primitives = read(join(SRC, "components", "nexus", "primitives.tsx"));
+  const root = read(join(SRC, "routes", "__root.tsx"));
+
+  it("the header renders the mark, not a text placeholder", () => {
+    expect(primitives).toContain("<NexusSymbol");
+    // The old badge was a rounded square reading "NX".
+    expect(primitives).not.toMatch(/rounded-md bg-primary[^"]*"[^>]*>\s*NX\s*</);
+  });
+
+  it("is drawn as vector art, so it stays sharp at any size", () => {
+    expect(primitives).toContain('viewBox="0 0 64 56"');
+    expect(primitives).toContain('role="img"');
+    // An image with a raster fallback would blur in the 44px header.
+    expect(primitives).not.toMatch(/nexus-mark\.png/);
+  });
+
+  it("carries the three people and the verified centre", () => {
+    expect(primitives).toContain("translate(32 9)");
+    expect(primitives).toContain("translate(14 45)");
+    expect(primitives).toContain("translate(50 45)");
+    expect(primitives).toMatch(/<circle cx="32" cy="32" r="14"/);
+  });
+
+  it("is the favicon, ahead of the legacy .ico", () => {
+    const svgIndex = root.indexOf("/nexus-mark.svg");
+    const icoIndex = root.indexOf("/favicon.ico");
+
+    expect(svgIndex).toBeGreaterThan(-1);
+    expect(icoIndex).toBeGreaterThan(-1);
+    // Browsers take the first icon they can render, so order decides which wins.
+    expect(svgIndex).toBeLessThan(icoIndex);
+  });
+});
