@@ -43,20 +43,13 @@ export function LandingPage() {
       <header className="fixed left-0 right-0 top-0 z-40 border-b border-border bg-background/78 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <BrandMark />
-          <nav
-            className="hidden items-center gap-6 text-sm text-muted-foreground md:flex"
-            aria-label="Marketing navigation"
-          >
-            <a href="#platform" className="transition hover:text-foreground">
-              Platform
-            </a>
-            <a href="#security" className="transition hover:text-foreground">
-              Security
-            </a>
-            <a href="#showcase" className="transition hover:text-foreground">
-              Showcase
-            </a>
-          </nav>
+          {/*
+            The three anchor links are gone. "Showcase" scrolled to the hero
+            mockup, which is already on screen when the page loads, and
+            "Security" jumped to a section whose headline is "Built for teams
+            that move fast." rather than anything to do with security. A nav
+            whose items do not describe where they lead is worse than no nav.
+          */}
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild>
               <Link to="/login">Sign in</Link>
@@ -100,7 +93,7 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="relative nexus-enter" id="showcase">
+          <div className="relative nexus-enter">
             <div className="surface-card rounded-lg p-3 shadow-2xl">
               <div className="grid grid-cols-[1.05fr_0.95fr] gap-3">
                 <div className="space-y-3">
@@ -161,17 +154,6 @@ export function LandingPage() {
               </div>
             </div>
             <div className="glow-line absolute -bottom-6 left-16 h-px w-2/3" />
-          </div>
-        </section>
-
-        <section className="border-y border-border bg-panel/40 py-8">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-8 px-4 text-sm font-medium text-muted-foreground sm:px-6">
-            <span>Trusted by modern teams</span>
-            <span>FintechOps</span>
-            <span>Cloudlane</span>
-            <span>Northstar AI</span>
-            <span>Atlas Systems</span>
-            <span>SignalWorks</span>
           </div>
         </section>
 

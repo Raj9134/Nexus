@@ -347,6 +347,48 @@ describe("the task and audit filters", () => {
   });
 });
 
+describe("the landing page", () => {
+  const landing = read(join(SRC, "pages", "LandingPage.tsx"));
+
+  /*
+    "Trusted by modern teams" listed FintechOps, Cloudlane, Northstar AI, Atlas
+    Systems and SignalWorks. None of them is a real company, so on a public site
+    the strip reads as a claim about who uses NEXUS that nobody can verify. It
+    is not placeholder data in the sense of a wrong number, which is why it
+    slipped through the earlier guards, but it is the same class of thing: the
+    page asserting something untrue.
+  */
+  it("names no companies", () => {
+    for (const name of [
+      "FintechOps",
+      "Cloudlane",
+      "Northstar AI",
+      "Atlas Systems",
+      "SignalWorks",
+    ]) {
+      expect(landing, `the landing page names ${name}`).not.toContain(name);
+    }
+
+    expect(landing).not.toContain("Trusted by");
+  });
+
+  /*
+    The three anchor links went with it. "Showcase" scrolled to the hero
+    mockup, which is on screen when the page loads, and "Security" jumped to a
+    section headed "Built for teams that move fast."
+  */
+  it("has no nav item that does not describe where it leads", () => {
+    expect(landing).not.toMatch(/href="#/);
+    expect(landing).not.toContain("Showcase");
+  });
+
+  it("leaves no orphaned anchor targets", () => {
+    // An id nothing links to is harmless, but this one existed only for the
+    // link that was just removed.
+    expect(landing).not.toContain('id="showcase"');
+  });
+});
+
 describe("task assignment", () => {
   /*
     The task drawer's Assign button pushed a toast that said "Assign menu
