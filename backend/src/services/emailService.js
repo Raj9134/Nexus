@@ -59,7 +59,24 @@ const getTransporter = () => {
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASSWORD
-        }
+        },
+        /*
+            Without these, a send against a provider that is unreachable, rate
+            limited or simply wrong hangs on the socket. Nodemailer's default is
+            to wait, and "wait" on a live request is a hung request: on Render
+            the connection was dropped after 90 seconds, so registering an
+            account failed outright and password reset sat on "Please wait...".
+
+            Nodemailer also retries internally, multiplying the worst case. A
+            registration email is not worth 30 seconds of someone's connection,
+            so a provider that has not answered in eight seconds is treated as
+            unavailable and the caller carries on without the message. Boot
+            verifies the credentials once, so a broken provider is announced
+            there rather than discovered here.
+        */
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 8000
     });
 
     return transporter;
@@ -202,9 +219,9 @@ const isConfigured = () => smtpConfigured();
     link is on its way. This is the same handshake the first send would do,
     done at startup so the log can state the truth either way.
 
-    Timeouts are short on purpose. Startup must not hang on a provider that
-    accepts the TCP connection and then goes quiet, and a mail server that
-    cannot answer in ten seconds is not one worth waiting for.
+    Timeouts come from the transport itself, so there is nothing extra to set
+    here: a provider that will not answer within them fails the boot check just
+    as it fails a send, rather than one being generous and the other not.
 */
 const verifyTransport = () => {
     const active = getTransporter();
@@ -212,10 +229,6 @@ const verifyTransport = () => {
     if (!active) {
         return Promise.reject(new Error("SMTP is not configured"));
     }
-
-    active.connectionTimeout = 10000;
-    active.greetingTimeout = 10000;
-    active.socketTimeout = 10000;
 
     return active.verify();
 };

@@ -132,8 +132,8 @@ const RESEND = {
         true
     );
     check(
-        "verify is bounded so a silent provider cannot stall startup",
-        /connectionTimeout\s*=\s*\d+/.test(emailSource) && /greetingTimeout\s*=\s*\d+/.test(emailSource),
+        "the transport itself is bounded so a silent provider cannot stall a request",
+        /connectionTimeout\s*:\s*\d+/.test(emailSource) && /greetingTimeout\s*:\s*\d+/.test(emailSource) && /socketTimeout\s*:\s*\d+/.test(emailSource),
         true
     );
     check("the old unconditional success message is gone", /will be emailed\)/.test(source), false);
