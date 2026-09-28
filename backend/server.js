@@ -6,12 +6,21 @@ const { Server } = require("socket.io");
 
 const app = require("./src/app");
 const connectDatabase = require("./src/config/db");
+const emailService = require("./src/services/emailService");
 const Message = require("./src/models/Message");
 const User = require("./src/models/User");
 const { socketAuthMiddleware } = require("./src/socket/socketAuth");
 const { resolveCallPeer } = require("./src/socket/callGuard");
 const { checkChannelAccess } = require("./src/services/permissionService");
-const PORT = 5000;
+/*
+    Railway, Render, Fly and Heroku all assign a port at deploy time and pass it
+    in PORT. Hardcoding 5000 meant the server listened where it was told not to,
+    the health check never passed, and the deploy failed with a timeout that says
+    nothing about the cause.
+*/
+const PORT = Number(process.env.PORT) || 5000;
+
+const HOST = process.env.HOST || "0.0.0.0";
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_SDP_LENGTH = 20000;
@@ -716,11 +725,28 @@ const startServer = async () => {
         process.exit(1);
     }
 
-    server.listen(PORT, () => {
+    server.listen(PORT, HOST, () => {
 
         console.log(
-            `NEXUS server running on port ${PORT}`
+            `NEXUS server running on port ${PORT} (${HOST})`
         );
+
+        /*
+            Mail is easy to misread as working. With no SMTP settings the server
+            logs each message and hands the token back to the browser, so
+            "forgot password" appears to succeed while nothing is ever sent.
+            Stating the mode on boot makes that visible without having to
+            trigger a reset and go looking in the console.
+        */
+        if (emailService.isConfigured()) {
+            console.log(
+                `Mail: SMTP via ${process.env.SMTP_HOST} (password resets will be emailed)`
+            );
+        } else {
+            console.log(
+                "Mail: NOT CONFIGURED - reset tokens are logged here and returned to the browser. Set SMTP_HOST and SMTP_PORT in backend/.env to send real email."
+            );
+        }
 
     });
 

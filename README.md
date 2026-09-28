@@ -122,6 +122,47 @@ cannot catch, because those were the ones that reached a browser:
 The frontend is also checked by `tsc --noEmit` and `eslint .`. CI runs all
 four.
 
+## Email
+
+Password resets, email verification and workspace invites all go out through
+`backend/src/services/emailService.js`, which is Nodemailer over SMTP with three
+ready-made templates. With no SMTP settings it logs each message and returns the
+token in the API response outside production, so local development and the test
+suites work with no provider. The boot log always states which mode is active.
+
+### Resend
+
+The simplest provider: one API key, 100 emails/day free.
+
+```
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=resend
+SMTP_PASSWORD=re_...        # your API key from resend.com -> API Keys
+MAIL_FROM=NEXUS <onboarding@resend.dev>
+```
+
+`MAIL_FROM` has to be a verified address. `onboarding@resend.dev` only sends to
+the address that signed up, so for anything else add a domain in Resend and put
+it here.
+
+`SMTP_USER` and `SMTP_PASSWORD` are both required before mail counts as
+configured. That is deliberate: the same boolean decides whether a reset token
+is emailed or handed back to the browser, so a half-filled block would swallow
+the token and then fail to send anything, leaving no way back into the account.
+
+Check it at any time:
+
+```sh
+cd backend
+npm run check:mail                    # validates the block, exits non-zero if wrong
+npm run check:mail you@example.com    # also sends a real message
+```
+
+The receiver must be the address the Resend account was created with until a
+domain is verified.
+
 ## Signing in and out
 
 The login form starts empty. It used to ship pre-filled with a real account's

@@ -16,7 +16,24 @@ const nodemailer = require("nodemailer");
 
 const BRAND = process.env.MAIL_FROM_NAME || "NEXUS";
 
-const smtpConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_PORT);
+/*
+    Host and port alone are not enough. isConfigured() also decides whether the
+    reset token is returned to the browser, so a half-filled block -- host set,
+    password blank -- would swallow the token and then fail to send anything,
+    leaving the user with no way in at all. Requiring the credentials means an
+    incomplete setup behaves like no setup: the token still comes back and the
+    boot log still says so.
+
+    A relay with no authentication can satisfy this with a placeholder user and
+    password; every provider this is likely to be pointed at requires them.
+*/
+const smtpConfigured = () =>
+    Boolean(
+        process.env.SMTP_HOST &&
+            process.env.SMTP_PORT &&
+            process.env.SMTP_USER &&
+            process.env.SMTP_PASSWORD,
+    );
 
 const cleanEmail = (value) =>
     typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -39,12 +56,10 @@ const getTransporter = () => {
         host: process.env.SMTP_HOST,
         port: Number(process.env.SMTP_PORT),
         secure: String(process.env.SMTP_SECURE).toLowerCase() === "true",
-        auth: process.env.SMTP_USER
-            ? {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD
-            }
-            : undefined
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASSWORD
+        }
     });
 
     return transporter;

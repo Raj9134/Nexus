@@ -9,8 +9,10 @@
     "test:realtime": "node tests/auth-realtime.test.js",
     "test:invites": "node tests/invite-security.test.js",
     "test:analytics": "node tests/analytics-range.test.js",
+    "test:mail": "node tests/mail-config.test.js",
+    "check:mail": "node scripts/check-mail.cjs",
     "test:e2e": "node tests/e2e.browser.cjs",
-    "test:all": "node tests/contract.test.js && node tests/auth-realtime.test.js && node tests/invite-security.test.js && node tests/analytics-range.test.js"
+    "test:all": "node tests/contract.test.js && node tests/auth-realtime.test.js && node tests/invite-security.test.js && node tests/analytics-range.test.js && node tests/mail-config.test.js"
   },
   "keywords": [],
   "author": "",
