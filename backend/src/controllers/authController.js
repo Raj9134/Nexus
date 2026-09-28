@@ -452,8 +452,19 @@ const forgotPassword = async (req, res) => {
         console.log(`[auth] password reset token for ${email}: ${token}`);
     }
 
-    // The dev shortcut is only safe while there is no real mail provider.
-    if (process.env.NODE_ENV !== "production" && !emailService.isConfigured()) {
+    /*
+        Off production, hand back the token whenever the mail did not actually
+        go out, which covers a configured-but-broken provider as well as no
+        provider at all.
+
+        The old condition asked isConfigured() instead, so a filled-in env block
+        silenced the token on the strength of the variables being present. If
+        that provider then rejected the send -- a revoked key, a bad login --
+        the response said nothing, nothing arrived, and the only way back into
+        the account had just been discarded. A dev convenience that can lock
+        someone out of their own workspace is not a convenience.
+    */
+    if (process.env.NODE_ENV !== "production" && !delivery.delivered) {
         response.devToken = token;
     }
 
@@ -542,7 +553,9 @@ const requestEmailVerification = async (req, res) => {
         console.log(`[auth] email verification token for ${email}: ${token}`);
     }
 
-    if (process.env.NODE_ENV !== "production" && !emailService.isConfigured()) {
+    /* Same reasoning as the password reset: the token is returned whenever the
+       message did not arrive, not merely when no provider is configured. */
+    if (process.env.NODE_ENV !== "production" && !delivery.delivered) {
         response.devToken = token;
     }
 

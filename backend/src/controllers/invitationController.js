@@ -53,13 +53,17 @@ const dispatchInvites = async (organization, emails, inviterId) => {
     const inviterName = await getInviterName(inviterId);
 
     // Delivery is best effort, so one bad address cannot abort the batch.
+    // Each result is recorded on the invite itself: the caller needs to know
+    // whether a message actually went out before deciding to show the token.
     for (const invite of issued) {
-        await emailService.send("workspace_invite", {
+        const result = await emailService.send("workspace_invite", {
             to: invite.email,
             token: invite.token,
             organization: organization.name,
             inviter: inviterName
         });
+
+        invite.delivered = Boolean(result && result.delivered);
     }
 
     return issued;
@@ -143,8 +147,10 @@ const createInvites = async (req, res) => {
         organization: serializeOrganization(organization),
         invited: issued.map((invite) => invite.email),
         skipped: emails.filter((email) => !targets.includes(email)),
-        // Dev-only convenience: the local UI needs the link to test acceptance.
-        ...(emailService.isConfigured()
+        /* Dev-only convenience: the local UI needs the link to test acceptance.
+           Same rule as onboarding -- shown when the mail did not go out, not
+           merely when no provider is configured. */
+        ...(issued.length && issued.every((invite) => invite.delivered)
             ? {}
             : {
                 invitations: issued.map((invite) => ({

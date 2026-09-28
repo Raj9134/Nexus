@@ -1,4 +1,5 @@
 const path = require("path");
+const { readFileSync } = require("fs");
 
 const backend = path.resolve(__dirname, "..");
 const emailService = require(path.join(backend, "src", "services", "emailService"));
@@ -108,6 +109,45 @@ const RESEND = {
         if (restore) {
             restore();
         }
+    }
+
+    /*
+        The boot log used to announce "password resets will be emailed" purely
+        from the presence of the variables. A revoked key satisfies that check
+        perfectly and then fails the first real send, by which point a user has
+        already been told their reset link is on its way. The log now reports
+        what the provider actually said.
+    */
+    const source = readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+    const emailSource = readFileSync(
+        path.join(__dirname, "..", "src", "services", "emailService.js"),
+        "utf8"
+    );
+
+    check("the boot log asks the provider rather than trusting the env", /verifyTransport\(\)/.test(source), true);
+    check("verifyTransport is exported", /verifyTransport/.test(emailSource), true);
+    check(
+        "a rejected login is reported as a failure, not as working mail",
+        /REJECTED/.test(source) && /will NOT be sent/.test(source),
+        true
+    );
+    check(
+        "verify is bounded so a silent provider cannot stall startup",
+        /connectionTimeout\s*=\s*\d+/.test(emailSource) && /greetingTimeout\s*=\s*\d+/.test(emailSource),
+        true
+    );
+    check("the old unconditional success message is gone", /will be emailed\)/.test(source), false);
+
+    // With nothing configured there is no transport to ask, and it has to
+    // reject rather than resolve: reporting success without a server would
+    // reintroduce the same lie by a different route.
+    const bareEnv = withEnv({ SMTP_HOST: "", SMTP_PORT: "", SMTP_USER: "", SMTP_PASSWORD: "" });
+    try {
+        let rejected = false;
+        await emailService.verifyTransport().catch(() => { rejected = true; });
+        check("verifyTransport rejects when nothing is configured", rejected, true);
+    } finally {
+        bareEnv();
     }
 
     const passed = results.filter(Boolean).length;

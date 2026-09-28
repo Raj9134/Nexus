@@ -737,16 +737,39 @@ const startServer = async () => {
             "forgot password" appears to succeed while nothing is ever sent.
             Stating the mode on boot makes that visible without having to
             trigger a reset and go looking in the console.
+
+            The mode is reported by asking the server, not by reading the env
+            block. A block can be complete and still be wrong: a revoked key, a
+            typo in the host, a provider that rejects the login. The previous
+            version only checked that the variables were present and announced
+            "password resets will be emailed" over a configuration that could
+            not send anything -- the exact lie this line exists to prevent, and
+            worse than saying nothing, because it is believed.
+
+            verify() is a handshake and an AUTH, then a clean disconnect. Nothing
+            is sent to anyone. Bounded so a provider that accepts the connection
+            and then stalls cannot hold up startup, which on a free host means a
+            service that never becomes healthy.
         */
-        if (emailService.isConfigured()) {
-            console.log(
-                `Mail: SMTP via ${process.env.SMTP_HOST} (password resets will be emailed)`
-            );
-        } else {
+        if (!emailService.isConfigured()) {
             console.log(
                 "Mail: NOT CONFIGURED - reset tokens are logged here and returned to the browser. Set SMTP_HOST and SMTP_PORT in backend/.env to send real email."
             );
+
+            return;
         }
+
+        emailService.verifyTransport()
+            .then(() => {
+                console.log(
+                    `Mail: SMTP via ${process.env.SMTP_HOST} verified, password resets will be emailed`
+                );
+            })
+            .catch((error) => {
+                console.warn(
+                    `Mail: SMTP via ${process.env.SMTP_HOST} REJECTED (${error.code || error.message}) - password resets will NOT be sent, and the token is returned to the browser. The credentials are wrong, not merely missing.`
+                );
+            });
 
     });
 

@@ -1,0 +1,72 @@
+# Render blueprint. Both services from one file, so the dashboard does the
+# wiring instead of two separate forms and a copy-pasted env var list.
+#
+# Free instances are `type: free`. They spin down after 15 minutes of no
+# traffic and cold-start on the next request, which is the trade for $0.
+#
+# NO DISK IS DECLARED, deliberately. Render's persistent disks are a paid
+# feature, so on the free tier there is nowhere to mount one. Uploads are
+# therefore written to UPLOAD_DIR on the container filesystem and are lost
+# whenever the instance is replaced. The file feature still works end to end
+# within a single instance lifetime; it just does not survive a redeploy.
+# Upgrading to a paid instance and adding a disk at /var/data is the fix, and
+# UPLOAD_DIR already points there so nothing else changes.
+
+services:
+  - type: web
+    name: nexus-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /health
+    # Free instances get killed when idle. There is no way to opt out, so the
+    # only lever is to not look permanently broken while starting.
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.resend.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        value: resend
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        value: NEXUS <onboarding@resend.dev>
+      - key: MAIL_FROM_NAME
+        value: NEXUS
+
+  - type: web
+    name: nexus-web
+    runtime: node
+    plan: free
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: node .output/server/index.mjs
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      # Baked into the bundle at build time, so it must be the API's real URL.
+      # Fill this in as soon as nexus-api is up, then redeploy this service:
+      # Render has no equivalent of Railway's cross-service reference, so
+      # there is no way for the build to discover the address on its own.
+      - key: VITE_API_URL
+        sync: false

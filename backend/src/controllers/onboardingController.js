@@ -156,8 +156,16 @@ const completeOnboarding = async (req, res) => {
         project: serializeProject(project),
         membersAdded: added,
         invitesPending: organization.pendingInvites,
-        // Dev-only: lets the local UI drive the accept flow without a mailbox.
-        ...(emailService.isConfigured()
+        /*
+            Dev-only: lets the local UI drive the accept flow without a mailbox.
+
+            Keyed on whether the message actually went out, not on whether a
+            provider is configured. A filled-in but broken SMTP block used to
+            suppress these tokens while every send failed, leaving invites
+            sitting in pending with no way for the invitee to ever see the
+            email that was supposed to tell them about them.
+        */
+        ...(issuedInvites.length && issuedInvites.every((invite) => invite.delivered)
             ? {}
             : {
                 invitations: issuedInvites.map((invite) => ({

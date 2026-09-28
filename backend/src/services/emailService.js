@@ -193,9 +193,37 @@ const send = async (kind, payload) => {
 
 const isConfigured = () => smtpConfigured();
 
+/*
+    Asks the provider whether it accepts the credentials.
+
+    Presence is not acceptance. A revoked key, a mistyped host or a login the
+    provider refuses all satisfy smtpConfigured() and then fail on the first
+    send, which is too late: by then a user has already been told the reset
+    link is on its way. This is the same handshake the first send would do,
+    done at startup so the log can state the truth either way.
+
+    Timeouts are short on purpose. Startup must not hang on a provider that
+    accepts the TCP connection and then goes quiet, and a mail server that
+    cannot answer in ten seconds is not one worth waiting for.
+*/
+const verifyTransport = () => {
+    const active = getTransporter();
+
+    if (!active) {
+        return Promise.reject(new Error("SMTP is not configured"));
+    }
+
+    active.connectionTimeout = 10000;
+    active.greetingTimeout = 10000;
+    active.socketTimeout = 10000;
+
+    return active.verify();
+};
+
 module.exports = {
     send,
     isConfigured,
+    verifyTransport,
     buildLink: link,
     TEMPLATES
 };
