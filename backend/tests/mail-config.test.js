@@ -150,6 +150,112 @@ const RESEND = {
         bareEnv();
     }
 
+    /*
+        The CORS allow-list existed twice, reading different variables. app.js
+        read CORS_ORIGINS and fell back to a hardcoded localhost list; server.js
+        read CLIENT_ORIGIN. So setting CLIENT_ORIGIN -- what the deploy guide
+        instructs -- configured the socket handshake and nothing else, and every
+        ordinary fetch from the deployed frontend was refused. It presented as a
+        sign-in form stuck on "Please wait..." with a healthy /health and an
+        empty console, which is why it went out to a live deployment before it
+        was caught.
+
+        The rule is now one exported predicate, asserted directly against the
+        environment combinations that decide it.
+    */
+    const { isOriginAllowed, getAllowedOrigins } = require(
+        path.join(backend, "src", "config", "corsOrigins")
+    );
+
+    const withMode = (values) => {
+        const saved = {};
+
+        for (const key of ["NODE_ENV", "CLIENT_ORIGIN", "CORS_ORIGINS"]) {
+            saved[key] = process.env[key];
+        }
+
+        for (const key of ["NODE_ENV", "CLIENT_ORIGIN", "CORS_ORIGINS"]) {
+            if (values[key] === undefined) {
+                delete process.env[key];
+            } else {
+                process.env[key] = values[key];
+            }
+        }
+
+        return () => {
+            for (const key of ["NODE_ENV", "CLIENT_ORIGIN", "CORS_ORIGINS"]) {
+                if (saved[key] === undefined) {
+                    delete process.env[key];
+                } else {
+                    process.env[key] = saved[key];
+                }
+            }
+        };
+    };
+
+    const deployed = "https://nexus-web-abc.onrender.com";
+
+    // CLIENT_ORIGIN is the variable the docs and the host both ask for, so it
+    // is the case that has to work.
+    let restoreCors = withMode({ NODE_ENV: "production", CLIENT_ORIGIN: deployed, CORS_ORIGINS: undefined });
+    try {
+        check("production allows the configured frontend", isOriginAllowed(deployed), true);
+        check("CLIENT_ORIGIN is honoured by the shared rule", getAllowedOrigins().includes(deployed), true);
+    } finally {
+        restoreCors();
+    }
+
+    restoreCors = withMode({ NODE_ENV: "production", CLIENT_ORIGIN: undefined, CORS_ORIGINS: undefined });
+    try {
+        check("production with no allow-list blocks every browser origin", isOriginAllowed(deployed), false);
+        check("requests without an origin still pass for health checks", isOriginAllowed(undefined), true);
+    } finally {
+        restoreCors();
+    }
+
+    restoreCors = withMode({ NODE_ENV: "production", CLIENT_ORIGIN: deployed, CORS_ORIGINS: undefined });
+    try {
+        check("a foreign origin is refused in production", isOriginAllowed("https://evil.example"), false);
+        check("localhost is not silently allowed in production", isOriginAllowed("http://localhost:3000"), false);
+    } finally {
+        restoreCors();
+    }
+
+    restoreCors = withMode({ NODE_ENV: "development", CLIENT_ORIGIN: undefined, CORS_ORIGINS: undefined });
+    try {
+        check("development still allows localhost", isOriginAllowed("http://localhost:3000"), true);
+    } finally {
+        restoreCors();
+    }
+
+    restoreCors = withMode({ NODE_ENV: "production", CLIENT_ORIGIN: undefined, CORS_ORIGINS: "https://a.example, https://b.example" });
+    try {
+        check("CORS_ORIGINS is still honoured, comma separated", isOriginAllowed("https://b.example"), true);
+    } finally {
+        restoreCors();
+    }
+
+    // Both layers must consume the one rule, or the drift that caused this
+    // comes straight back.
+    const appSource = readFileSync(path.join(backend, "src", "app.js"), "utf8");
+    const serverSource = readFileSync(path.join(backend, "server.js"), "utf8");
+
+    check(
+        "the HTTP layer uses the shared predicate",
+        /isOriginAllowed/.test(appSource) && !/DEFAULT_ORIGINS/.test(appSource),
+        true
+    );
+    check(
+        "the socket layer uses the same predicate",
+        /isOriginAllowed/.test(serverSource) && !/process\.env\.CLIENT_ORIGIN\s*\|\|/.test(serverSource),
+        true
+    );
+    check(
+        "an empty production allow-list is announced at boot",
+        /CLIENT_ORIGIN is not set/.test(serverSource),
+        true
+    );
+
     const passed = results.filter(Boolean).length;
     console.log(`\n===== ${passed}/${results.length} passed =====`);
 

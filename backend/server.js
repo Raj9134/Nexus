@@ -75,50 +75,24 @@ const readPayload = (value) => {
 
 
 /*
-    Wildcard origin hataya gaya.
-    CLIENT_ORIGIN env se allow-list lo, aur development me
-    localhost ke kisi bhi port ko jaane do.
+    The allow-list lives in one place now, shared with the HTTP layer so the
+    socket handshake and ordinary requests cannot disagree about who is allowed.
+    This copy of the rule previously read CLIENT_ORIGIN while app.js read
+    CORS_ORIGINS, which is how a deployment ended up with working sockets and
+    every fetch blocked.
 */
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+const { getAllowedOrigins, isOriginAllowed } = require("./src/config/corsOrigins");
 
 const checkCorsOrigin = (origin, callback) => {
 
-    if (!origin) {
-        return callback(null, true);
+    if (!isOriginAllowed(origin)) {
+        return callback(
+            new Error("Origin not allowed by CORS"),
+            false
+        );
     }
 
-    if (allowedOrigins.includes("*")) {
-        return callback(null, true);
-    }
-
-    if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-    }
-
-    if (process.env.NODE_ENV !== "production") {
-        try {
-            const parsed = new URL(origin);
-
-            if (
-                parsed.hostname === "localhost" ||
-                parsed.hostname === "127.0.0.1"
-            ) {
-                return callback(null, true);
-            }
-
-        } catch (error) {
-            return callback(null, false);
-        }
-    }
-
-    return callback(
-        new Error("Origin not allowed by CORS"),
-        false
-    );
-
+    return callback(null, true);
 };
 
 
@@ -730,6 +704,33 @@ const startServer = async () => {
         console.log(
             `NEXUS server running on port ${PORT} (${HOST})`
         );
+
+        /*
+            CORS with an empty allow-list in production is the quietest failure
+            in this whole service. The server starts, every curl and every test
+            passes, /health answers 200, and the deployment looks healthy. Only
+            a browser notices, because it is the only client that sends an Origin
+            and enforces the response header. The symptom is a form that sits on
+            "Please wait..." forever: the request never reaches a handler that can
+            explain why, and the console shows nothing.
+
+            Since the frontend and the API are deployed separately, the origin is
+            not knowable from here, so it has to be supplied. Saying so at boot
+            turns a mystery into a log line.
+        */
+        const allowedOrigins = getAllowedOrigins();
+
+        if (process.env.NODE_ENV === "production" && allowedOrigins.length === 0) {
+            console.warn(
+                "CORS: CLIENT_ORIGIN is not set, so every browser request from the " +
+                "frontend will be blocked. Requests without an Origin (curl, health " +
+                "checks, the deploy probe) still succeed, which is why this looks " +
+                "fine until someone opens the site. Set CLIENT_ORIGIN to the " +
+                "frontend's URL, e.g. https://nexus-web-xxxx.onrender.com"
+            );
+        } else if (allowedOrigins.length) {
+            console.log(`CORS: allowing ${allowedOrigins.join(", ")}`);
+        }
 
         /*
             Mail is easy to misread as working. With no SMTP settings the server

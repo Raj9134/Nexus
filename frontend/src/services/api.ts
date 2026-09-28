@@ -179,7 +179,31 @@ const rawRequest = async <T>(path: string, init: RequestInit, token: string | nu
     app showed a stale body and the caller could not tell it apart from
     current data. Mutations already bust the cache; reads must too.
   */
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
+  } catch (cause) {
+    /*
+      fetch rejects here when the browser blocks the request itself, and the one
+      case that matters in a split deployment is CORS: the API answered, but not
+      with an Access-Control-Allow-Origin this site is listed under, so the
+      browser hides the response and turns it into a network error. The generic
+      "could not reach" message then sends people looking at the frontend, when
+      the API is fine and its CLIENT_ORIGIN is simply unset.
+
+      The name is only in this path, so it can be named without leaking anything
+      the user did not already have on screen.
+    */
+    const blocked = cause instanceof TypeError;
+
+    throw new ApiError(
+      0,
+      blocked
+        ? "The API at this address refused the request. If the API and this site are on different domains, its CLIENT_ORIGIN is probably not set to this site's URL."
+        : "Could not reach the API.",
+    );
+  }
 
   // A 304 carries no body, so response.json() would reject and the caller
   // would silently receive {}. With no-store this should not happen, but a

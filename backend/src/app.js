@@ -23,21 +23,18 @@ const supportRoutes = require("./routes/supportRoutes");
 
 const app = express();
 
-const DEFAULT_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:8080",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:3000"
-];
+const { isOriginAllowed } = require("./config/corsOrigins");
 
-const allowedOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
-    : DEFAULT_ORIGINS;
-
+/*
+    origin is a predicate rather than a list so it can be evaluated per request.
+    Passing an array makes the cors package compare against a snapshot taken at
+    boot, which is fine, but it also silently accepted every origin whenever that
+    snapshot was the localhost defaults -- in production, where those defaults
+    were the only thing on offer. The shared module is the single source of truth
+    for the HTTP layer, the socket handshake and the boot log.
+*/
 app.use(cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     credentials: true
 }));
 
