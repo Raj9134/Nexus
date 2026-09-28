@@ -11,8 +11,18 @@ process.env.NODE_ENV = "test";
 
 const BASE = `${process.env.API_BASE || "http://localhost:5000"}/api`;
 
-const call = async (method, path, token, body) => {
-    const res = await fetch(BASE + path, {
+/*
+    `raw: true` resolves against the origin instead of the /api prefix. Only the
+    health check needs it: that route is mounted at the root because it is the
+    path a load balancer polls, and this helper exists to exercise the versioned
+    API surface.
+*/
+const ORIGIN = process.env.API_BASE || "http://localhost:5000";
+
+const call = async (method, path, token, body, options = {}) => {
+    const target = options.raw ? ORIGIN + path : BASE + path;
+
+    const res = await fetch(target, {
         method,
         headers: {
             "Content-Type": "application/json",
@@ -524,6 +534,40 @@ const report = () => {
     const filteredAssignee = await call("GET", `/analytics?assigneeId=${mateId}`, token);
     check("GET /analytics?assigneeId", filteredAssignee.status, 200);
     check("an assignee filter keeps the status and metrics in step", filteredAssignee.data.analytics.status.reduce((sum, s) => sum + s.value, 0), filteredAssignee.data.analytics.metrics.activeTasks + filteredAssignee.data.analytics.metrics.completedTasks);
+
+    /*
+      Health check. Railway, Render and Fly all poll this and mark a service
+      unhealthy when it fails, so a 404 here reads as a failed deploy even while
+      every real route answers.
+
+      Fetched from the origin rather than through the helper below, because the
+      helper prefixes /api and this route deliberately sits at the root: a load
+      balancer is not going to know about the API's mount point.
+    */
+    const health = await call("GET", "/health", null, undefined, { raw: true });
+    check("GET /health needs no token", health.status, 200);
+    shape("health payload", health.data, ["status", "database", "uptimeSeconds", "elapsedMs"]);
+    check("health reports the database", health.data.database, "up");
+    check("health status agrees with the database", health.data.status, "ok");
+
+    /*
+      The port has to come from the environment. It was a literal 5000, which is
+      fine locally and fatal on a host that assigns a port at deploy time and
+      then health-checks the one it picked.
+    */
+    const { readFileSync } = require("fs");
+    const path = require("path");
+
+    check(
+        "PORT is read from the environment",
+        /process\.env\.PORT/.test(readFileSync(path.join(__dirname, "..", "server.js"), "utf8")),
+        true
+    );
+    check(
+        "uploads are redirectable to a volume",
+        /process\.env\.UPLOAD_DIR/.test(readFileSync(path.join(__dirname, "..", "src", "config", "storage.js"), "utf8")),
+        true
+    );
 
     check("an unknown range is refused, not ignored", (await call("GET", "/analytics?range=last%20fortnight", token)).status, 400);
     check("analytics is refused when signed out", (await call("GET", "/analytics", null)).status, 401);

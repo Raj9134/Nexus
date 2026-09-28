@@ -27,6 +27,19 @@ import type {
 
 const API_BASE: string = import.meta.env["VITE_API_URL"] ?? "http://localhost:5000/api";
 
+/*
+  A production bundle still pointing at localhost is the most common way a
+  deploy looks fine and then fails every request, because the browser helpfully
+  tries to reach the developer's own machine. VITE_API_URL is baked in at build
+  time, so this is the only place that can notice.
+*/
+if (import.meta.env.PROD && /^https?:\/\/localhost(:|\/)/.test(API_BASE)) {
+  console.error(
+    `[NEXUS] VITE_API_URL is "${API_BASE}" in a production build, so every API ` +
+      "call will fail. Set VITE_API_URL to your deployed API origin and rebuild.",
+  );
+}
+
 const ACCESS_TOKEN_KEY = "nexus.accessToken";
 const REFRESH_TOKEN_KEY = "nexus.refreshToken";
 

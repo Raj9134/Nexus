@@ -74,6 +74,46 @@ app.get("/", (req, res) => {
 });
 
 
+/*
+    Health check for the platform to poll.
+
+    Railway, Render and Fly all restart or mark a service unhealthy based on
+    this, and a 404 on /health is read as "the deploy failed" even when the API
+    is answering perfectly well on every real route.
+
+    Reports the database separately. A host that restarts the process because
+    Mongo is briefly unreachable turns a blip into an outage loop, so a
+    degraded database is reported as degraded rather than as a failure.
+*/
+app.get("/health", async (req, res) => {
+
+    const startedAt = Date.now();
+    let database = "up";
+
+    try {
+        const mongoose = require("mongoose");
+
+        if (mongoose.connection.readyState !== 1) {
+            database = "down";
+        } else {
+            await mongoose.connection.db.admin().ping();
+        }
+    } catch (error) {
+        database = "error";
+    }
+
+    const ok = database === "up";
+
+    return res.status(ok ? 200 : 503).json({
+        status: ok ? "ok" : "degraded",
+        database,
+        uptimeSeconds: Math.round(process.uptime()),
+        elapsedMs: Date.now() - startedAt
+    });
+
+});
+
+
 app.use((error, req, res, next) => {
 
     if (error.code === "LIMIT_FILE_SIZE") {

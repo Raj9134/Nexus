@@ -1,7 +1,17 @@
 const fs = require("fs");
 const path = require("path");
 
-const UPLOAD_ROOT = path.resolve(__dirname, "..", "..", "uploads");
+/*
+    Uploads live on the local disk by default. On a hosted platform the container
+    filesystem is usually ephemeral, so every attachment and voice note would
+    vanish on the next deploy or restart. UPLOAD_DIR points the whole tree at a
+    mounted volume instead, which is what makes the file and voice features
+    survive a restart.
+*/
+const UPLOAD_ROOT = process.env.UPLOAD_DIR
+    ? path.resolve(process.env.UPLOAD_DIR)
+    : path.resolve(__dirname, "..", "..", "uploads");
+
 const AUDIO_ROOT = path.join(UPLOAD_ROOT, "audio");
 
 const ensureDirectory = (directory) => {
