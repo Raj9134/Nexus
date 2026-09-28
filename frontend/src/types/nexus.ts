@@ -65,7 +65,10 @@ export interface Task {
   assigneeId: string;
   assignee: string;
   reporter: string;
+  /** "Sep 22", for display. Carries no year, so it cannot be compared. */
   dueDate: string;
+  /** The real due timestamp. Overdue and Today filters are built from this. */
+  dueOn: string | null;
   labels: string[];
   comments: Comment[];
   attachments: number;
@@ -112,7 +115,10 @@ export interface FileItem {
 export interface CalendarEvent {
   id: string;
   title: string;
+  /** "Sep 15", for display only. Carries no year, so it cannot place an event. */
   date: string;
+  /** The real timestamp. This is what a calendar grid is built from. */
+  startAt: string | null;
   time: string;
   type: "Meeting" | "Deadline" | "Review" | "Planning";
   attendees: string[];
@@ -121,7 +127,10 @@ export interface CalendarEvent {
 
 export interface AuditLog {
   id: string;
+  /** Formatted for display. */
   timestamp: string;
+  /** The real timestamp, which is what a Date filter is built from. */
+  at: string | null;
   user: string;
   action: string;
   resource: string;

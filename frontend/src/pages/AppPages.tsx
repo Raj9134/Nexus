@@ -5,6 +5,8 @@ import {
   Bell,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Circle,
   Clock,
   Download,
@@ -29,12 +31,12 @@ import {
   Workflow,
   XCircle,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useNexus } from "@/context/NexusContext";
 import { cn } from "@/lib/utils";
-import type { Project, Task, TaskStatus, User } from "@/types/nexus";
+import type { Analytics, CalendarEvent, Project, Task, TaskStatus, User } from "@/types/nexus";
 import { AppShell } from "@/components/nexus/AppShell";
 import { DirectThread } from "@/components/nexus/DirectThread";
 import { Attachments } from "@/components/nexus/Attachments";
@@ -46,15 +48,36 @@ import {
   Card,
   EmptyState,
   MetricCard,
+  Modal,
   ProgressBar,
   SearchInput,
   SectionHeader,
   SelectField,
   SkeletonBlock,
   StatusDot,
+  SubmitButton,
   Tabs,
 } from "@/components/nexus/primitives";
 import { api, isAuthenticated } from "@/services/api";
+import {
+  MONTH_NAMES,
+  WEEKDAY_SHORT,
+  addDays,
+  addMonths,
+  dayKey,
+  dayLabel,
+  groupByDay,
+  isDueThisWeek,
+  isDueToday,
+  isOverdue,
+  isSameDay,
+  isToday,
+  isUpcoming,
+  monthGrid,
+  monthLabel,
+  startOfDay,
+  weekDays,
+} from "@/lib/calendar";
 
 const statusOrder: TaskStatus[] = ["Backlog", "Todo", "In Progress", "In Review", "Done"];
 
@@ -128,12 +151,12 @@ export function DashboardPage() {
           </div>
         )}
         <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-          <LineChartCard />
-          <DonutCard />
+          <LineChartCard analytics={nexus.analytics} />
+          <DonutCard analytics={nexus.analytics} />
         </div>
         <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-          <WorkloadCard />
-          <ProductivityCard />
+          <WorkloadCard analytics={nexus.analytics} />
+          <ProductivityCard analytics={nexus.analytics} />
         </div>
         <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
           <RecentActivity />
@@ -173,8 +196,7 @@ export function DashboardPage() {
   );
 }
 
-function LineChartCard() {
-  const { analytics } = useNexus();
+function LineChartCard({ analytics }: { analytics: Analytics }) {
   const max = Math.max(...analytics.progress.flatMap((row) => [row.planned, row.completed]));
   // A brand new workspace has no progress rows yet. Dividing by that max, or by
   // a zero-width axis, yields NaN, and React would write "NaN" into the SVG.
@@ -185,6 +207,17 @@ function LineChartCard() {
   const points = analytics.progress
     .map((row, index) => `${xAt(index)},${yAt(row.completed)}`)
     .join(" ");
+
+  /*
+    Was a fixed sentence about "38 to 88 tasks over six weeks" whatever the data
+    said, which a screen reader read out as fact. It is built from the series
+    now, and says plainly when there is nothing to plot.
+  */
+  const summary =
+    analytics.progress.length === 0
+      ? "No progress data for this selection"
+      : `Planned versus completed over the last ${analytics.progress.length} weeks, peaking at ${max} tasks`;
+
   return (
     <Card>
       <div className="flex items-center justify-between">
@@ -196,7 +229,7 @@ function LineChartCard() {
         className="mt-4 h-72 w-full overflow-visible"
         preserveAspectRatio="none"
         role="img"
-        aria-label="Project completion increased from 38 to 88 tasks over six weeks"
+        aria-label={summary}
       >
         <defs>
           <linearGradient id="area" x1="0" x2="0" y1="0" y2="1">
@@ -227,8 +260,7 @@ function LineChartCard() {
   );
 }
 
-function DonutCard() {
-  const { analytics } = useNexus();
+function DonutCard({ analytics }: { analytics: Analytics }) {
   const total = analytics.status.reduce((sum, item) => sum + item.value, 0);
   let offset = 25;
   const colors = [
@@ -307,36 +339,50 @@ function DonutCard() {
   );
 }
 
-function WorkloadCard() {
-  const { analytics } = useNexus();
-  const max = Math.max(...analytics.workload.map((row) => row.tasks));
+function WorkloadCard({ analytics }: { analytics: Analytics }) {
+  const max = Math.max(0, ...analytics.workload.map((row) => row.tasks));
+  /*
+    Guarded, because an empty workspace reports a max of 0 and 0/0 is NaN,
+    which React then writes into the style attribute as "NaN%". LineChartCard
+    and DonutCard already had this guard; these two did not.
+  */
+  const width = (tasks: number) => (max > 0 ? (tasks / max) * 100 : 0);
+
   return (
     <Card>
       <h2 className="font-display text-lg font-semibold">Team Workload</h2>
-      <div className="mt-5 space-y-4">
-        {analytics.workload.map((row) => (
-          <div
-            key={row.name}
-            className="grid grid-cols-[4rem_minmax(0,1fr)_2rem] items-center gap-3 text-sm"
-          >
-            <span className="text-muted-foreground">{row.name}</span>
-            <div className="h-2 rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-accent transition-all"
-                style={{ width: `${(row.tasks / max) * 100}%` }}
-              />
+      {analytics.workload.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Nobody has an open task in this selection.
+        </p>
+      ) : (
+        <div className="mt-5 space-y-4">
+          {analytics.workload.map((row) => (
+            <div
+              key={row.name}
+              className="grid grid-cols-[4rem_minmax(0,1fr)_2rem] items-center gap-3 text-sm"
+            >
+              <span className="text-muted-foreground">{row.name}</span>
+              <div className="h-2 rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-accent transition-all"
+                  style={{ width: `${width(row.tasks)}%` }}
+                />
+              </div>
+              <span className="text-right text-foreground">{row.tasks}</span>
             </div>
-            <span className="text-right text-foreground">{row.tasks}</span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
 
-function ProductivityCard() {
-  const { analytics } = useNexus();
-  const max = Math.max(...analytics.productivity.map((row) => row.points));
+function ProductivityCard({ analytics }: { analytics: Analytics }) {
+  const max = Math.max(0, ...analytics.productivity.map((row) => row.points));
+  // Same zero guard as WorkloadCard: a range with no completions has a max of 0.
+  const height = (points: number) => (max > 0 ? (points / max) * 100 : 0);
+
   return (
     <Card>
       <h2 className="font-display text-lg font-semibold">Weekly Productivity</h2>
@@ -346,8 +392,8 @@ function ProductivityCard() {
             <div className="flex h-44 w-full items-end rounded-md bg-secondary/50 p-1">
               <div
                 className="w-full rounded-md bg-primary/80 transition hover:bg-primary"
-                style={{ height: `${(row.points / max) * 100}%` }}
-                title={`${row.points} points`}
+                style={{ height: `${height(row.points)}%` }}
+                title={`${row.points} completed`}
               />
             </div>
             <span className="text-xs text-muted-foreground">{row.name}</span>
@@ -389,17 +435,25 @@ export function TasksPage() {
   const [project, setProject] = useState("All");
   const [priority, setPriority] = useState("All");
   const [status, setStatus] = useState("All");
+  const [due, setDue] = useState("Any");
   const filtered = nexus.tasks.filter((task) => {
+    /*
+      These were pinned to specific records: Overdue was `task.id === "NEX-183"`
+      and Today was `["Sep 22", "Sep 24"].includes(task.dueDate)`, so both tabs
+      showed one hardcoded task whatever the workspace actually contained. The
+      backend now sends dueOn, a real timestamp, because dueDate is "Sep 22"
+      with no year and cannot be compared.
+    */
     const matchesTab =
       tab === "All" ||
       (tab === "Completed"
         ? task.status === "Done"
         : tab === "Overdue"
-          ? task.id === "NEX-183"
+          ? isOverdue(task.dueOn)
           : tab === "Today"
-            ? ["Sep 22", "Sep 24"].includes(task.dueDate)
+            ? isDueToday(task.dueOn)
             : tab === "Upcoming"
-              ? true
+              ? task.status !== "Done" && isUpcoming(task.dueOn)
               : true);
     return (
       matchesTab &&
@@ -408,7 +462,10 @@ export function TasksPage() {
         task.id.toLowerCase().includes(query.toLowerCase())) &&
       (project === "All" || task.projectId === project) &&
       (priority === "All" || task.priority === priority) &&
-      (status === "All" || task.status === status)
+      (status === "All" || task.status === status) &&
+      (due === "Any" ||
+        (due === "Overdue" && isOverdue(task.dueOn)) ||
+        (due === "This week" && isDueThisWeek(task.dueOn)))
     );
   });
   return (
@@ -451,8 +508,8 @@ export function TasksPage() {
           />
           <SelectField
             label="Due Date"
-            value="Any"
-            onChange={() => undefined}
+            value={due}
+            onChange={setDue}
             options={["Any", "This week", "Overdue"]}
           />
         </div>
@@ -748,8 +805,8 @@ export function ProjectDetailPage() {
         {tab === "Chat" ? <MessagesPanel embedded channel="backend" /> : null}
         {tab === "Analytics" ? (
           <div className="grid gap-4 lg:grid-cols-2">
-            <LineChartCard />
-            <WorkloadCard />
+            <LineChartCard analytics={nexus.analytics} />
+            <WorkloadCard analytics={nexus.analytics} />
           </div>
         ) : null}
       </div>
@@ -915,7 +972,7 @@ export function TeamsPage() {
             </div>
           </Card>
         ) : tab === "Workload" ? (
-          <WorkloadCard />
+          <WorkloadCard analytics={nexus.analytics} />
         ) : (
           <RecentActivity />
         )}
@@ -1147,7 +1204,67 @@ function MessagesPanel({
 
 export function CalendarPage() {
   const nexus = useNexus();
-  const [view, setView] = useState("Month");
+  const [view, setView] = useState<"Month" | "Week" | "Day">("Month");
+  /*
+    Anchored to the real current date. The page used to render a fixed
+    "Sep 1" to "Sep 28" whatever the date was, with no way to reach another
+    month, and placed events with a hand-written map of day numbers to titles.
+  */
+  const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
+  const [creating, setCreating] = useState(false);
+
+  const grouped = useMemo(() => groupByDay(nexus.events), [nexus.events]);
+  const live = nexus.isDemo === false && isAuthenticated();
+
+  const days = useMemo(() => {
+    if (view === "Day") {
+      return [anchor];
+    }
+
+    return view === "Week" ? weekDays(anchor) : monthGrid(anchor);
+  }, [anchor, view]);
+
+  const step = (direction: -1 | 1) => {
+    if (view === "Day") {
+      setAnchor((current) => addDays(current, direction));
+      return;
+    }
+
+    if (view === "Week") {
+      setAnchor((current) => addDays(current, direction * 7));
+      return;
+    }
+
+    setAnchor((current) => addMonths(current, direction));
+  };
+
+  const heading = useMemo(() => {
+    if (view === "Day") {
+      const weekday = WEEKDAY_SHORT[anchor.getDay()] ?? "";
+      const month = MONTH_NAMES[anchor.getMonth()] ?? "";
+
+      return `${weekday} ${anchor.getDate()} ${month} ${anchor.getFullYear()}`;
+    }
+
+    if (view === "Week") {
+      const week = weekDays(anchor);
+      const from = week[0];
+      const to = week[week.length - 1];
+
+      if (!from || !to) {
+        return monthLabel(anchor);
+      }
+
+      return `${from.getDate()} ${MONTH_NAMES[from.getMonth()] ?? ""} - ${to.getDate()} ${
+        MONTH_NAMES[to.getMonth()] ?? ""
+      } ${to.getFullYear()}`;
+    }
+
+    return monthLabel(anchor);
+  }, [anchor, view]);
+
+  const shown = days.reduce((total, day) => total + (grouped.get(dayKey(day))?.length ?? 0), 0);
+
   return (
     <AppShell title="Calendar">
       <div className="space-y-5">
@@ -1155,41 +1272,281 @@ export function CalendarPage() {
           title="Team Calendar"
           description="Planning, reviews, milestones, and delivery deadlines."
           actions={
-            <Button onClick={() => nexus.openModal("event")}>
+            <Button onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" />
               Create Event
             </Button>
           }
         />
-        <Tabs tabs={["Month", "Week", "Day"]} value={view} onChange={setView} />
-        <div className="grid gap-4 lg:grid-cols-7">
-          {Array.from({ length: view === "Day" ? 1 : view === "Week" ? 7 : 28 }).map((_, index) => (
-            <Card key={index} className="min-h-32 p-3">
-              <p className="text-xs text-muted-foreground">Sep {index + 1}</p>
-              {nexus.events
-                .filter(
-                  (event) =>
-                    event.date.endsWith(String(index + 1).padStart(2, "0")) ||
-                    (index + 1 === 23 && event.title === "Sprint Planning") ||
-                    (index + 1 === 24 && event.title === "Client Demo") ||
-                    (index + 1 === 25 && event.title === "Backend Review") ||
-                    (index + 1 === 26 && event.title === "Team Meeting"),
-                )
-                .map((event) => (
-                  <button
-                    key={event.id}
-                    onClick={() => nexus.openEvent(event)}
-                    className="mt-2 block w-full rounded-md border border-primary/30 bg-primary/10 p-2 text-left text-xs text-primary"
-                  >
-                    {event.time}
-                    <span className="block truncate font-medium">{event.title}</span>
-                  </button>
-                ))}
-            </Card>
-          ))}
+
+        <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label={view === "Month" ? "Previous month" : `Previous ${view.toLowerCase()}`}
+              onClick={() => step(-1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label={view === "Month" ? "Next month" : `Next ${view.toLowerCase()}`}
+              onClick={() => step(1)}
+            >
+              <ChevronRight />
+            </Button>
+            <Button variant="secondary" onClick={() => setAnchor(startOfDay(new Date()))}>
+              Today
+            </Button>
+          </div>
+          <div className="flex items-center justify-between gap-3 sm:justify-center">
+            <p className="font-display text-lg font-semibold text-foreground">{heading}</p>
+            {shown > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {shown} event{shown === 1 ? "" : "s"}
+              </p>
+            ) : null}
+          </div>
+          <Tabs
+            tabs={["Month", "Week", "Day"]}
+            value={view}
+            onChange={(next) => setView(next as "Month" | "Week" | "Day")}
+          />
         </div>
+
+        {!live ? (
+          <Card className="p-4 text-sm text-muted-foreground">Sign in to see your calendar.</Card>
+        ) : view === "Day" ? (
+          <DayColumn day={anchor} events={grouped.get(dayKey(anchor)) ?? []} />
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-7">
+            {view === "Week"
+              ? WEEKDAY_SHORT.map((label, index) => (
+                  <p
+                    key={label}
+                    className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:block"
+                  >
+                    {label}
+                  </p>
+                ))
+              : null}
+            {days.map((day) => {
+              const inMonth = day.getMonth() === anchor.getMonth();
+
+              return (
+                <Card
+                  key={dayKey(day)}
+                  className={cn(
+                    "min-h-28 p-2",
+                    !inMonth && view === "Month" && "opacity-50",
+                    isToday(day) && "border-primary/60",
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "text-xs",
+                      isToday(day) ? "font-semibold text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    {dayLabel(day, view === "Month" ? anchor : undefined)}
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {(grouped.get(dayKey(day)) ?? []).map((event) => (
+                      <li key={event.id}>
+                        <button
+                          onClick={() => nexus.openEvent(event)}
+                          className="block w-full truncate rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-left text-[11px] text-primary hover:bg-primary/20"
+                          title={`${event.title} at ${event.time}`}
+                        >
+                          {event.time ? `${event.time} ` : ""}
+                          {event.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {creating ? (
+        <CreateEventDialog
+          defaultDate={dayKey(anchor)}
+          onClose={() => setCreating(false)}
+          onCreated={async () => {
+            setCreating(false);
+            await nexus.reload();
+          }}
+        />
+      ) : null}
     </AppShell>
+  );
+}
+
+/** One day, listed in order. Used by the Day view, which has no grid. */
+function DayColumn({ day, events }: { day: Date; events: CalendarEvent[] }) {
+  const nexus = useNexus();
+  const ordered = [...events].sort((left, right) => left.time.localeCompare(right.time));
+
+  return (
+    <Card className="p-4">
+      {ordered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Nothing scheduled for {day.getDate()} {MONTH_NAMES[day.getMonth()]}.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {ordered.map((event) => (
+            <li key={event.id}>
+              <button
+                onClick={() => nexus.openEvent(event)}
+                className="w-full rounded-md border border-primary/30 bg-primary/10 p-3 text-left hover:bg-primary/20"
+              >
+                <p className="text-xs text-primary">{event.time || "All day"}</p>
+                <p className="font-medium text-foreground">{event.title}</p>
+                {event.notes ? (
+                  <p className="mt-1 text-xs text-muted-foreground">{event.notes}</p>
+                ) : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * The Create Event form. This used to open the shared modal, which asked for a
+ * name and a priority and then ran a 650ms timer and printed "Create Event
+ * saved" without touching the API, so no event could ever be created.
+ */
+function CreateEventDialog({
+  defaultDate,
+  onClose,
+  onCreated,
+}: {
+  defaultDate: string;
+  onClose: () => void;
+  onCreated: () => void | Promise<void>;
+}) {
+  const nexus = useNexus();
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState(defaultDate);
+  const [time, setTime] = useState("09:00");
+  const [type, setType] = useState<CalendarEvent["type"]>("Meeting");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!title.trim()) {
+      setError("Give the event a title.");
+      return;
+    }
+
+    if (!date) {
+      setError("Pick a date.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      // The input is a local wall-clock time, so it is sent without a zone and
+      // the server stores it as given rather than shifting it.
+      await api.calendar.create({
+        title: title.trim(),
+        startAt: new Date(`${date}T${time || "09:00"}`).toISOString(),
+        type,
+        notes: notes.trim(),
+      });
+
+      nexus.pushToast(`${title.trim()} added to the calendar`, "success");
+      await onCreated();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save the event.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      title="Create Event"
+      description="Added to your workspace calendar. Everyone in the workspace can see it."
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <SubmitButton loading={saving} onClick={() => void save()}>
+            Create event
+          </SubmitButton>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <label className="text-sm font-medium text-foreground">
+          Title
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={200}
+            placeholder="Sprint review"
+            className="mt-2 h-10 w-full rounded-md border border-input bg-secondary/70 px-3 text-sm outline-none focus:border-primary"
+          />
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-medium text-foreground">
+            Date
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className="mt-2 h-10 w-full rounded-md border border-input bg-secondary/70 px-3 text-sm outline-none focus:border-primary"
+            />
+          </label>
+          <label className="text-sm font-medium text-foreground">
+            Time
+            <input
+              type="time"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+              className="mt-2 h-10 w-full rounded-md border border-input bg-secondary/70 px-3 text-sm outline-none focus:border-primary"
+            />
+          </label>
+        </div>
+        <SelectField
+          label="Type"
+          value={type}
+          onChange={(next) => setType(next as CalendarEvent["type"])}
+          options={["Meeting", "Deadline", "Review", "Planning"]}
+        />
+        <label className="text-sm font-medium text-foreground">
+          Notes
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            maxLength={2000}
+            placeholder="Anything the attendees should know"
+            className="mt-2 min-h-20 w-full rounded-md border border-input bg-secondary/70 p-3 text-sm outline-none focus:border-primary"
+          />
+        </label>
+        {error ? (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </Modal>
   );
 }
 
@@ -1386,7 +1743,84 @@ export function NotificationsPage() {
 export function AnalyticsPage() {
   const nexus = useNexus();
   const metrics = nexus.analytics.metrics;
-  const projectOptions = ["All", ...nexus.projects.map((project) => project.name)];
+  /*
+    These four dropdowns were all wired to `() => undefined`, so choosing a
+    project or a date range left the page exactly as it was. The figures are
+    computed on the server, so the choice now goes into the request rather than
+    being applied to the numbers already on screen.
+  */
+  const [projectId, setProjectId] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
+  const [range, setRange] = useState("30 days");
+  const [analytics, setAnalytics] = useState(nexus.analytics);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const filters = useMemo(
+    () => ({
+      ...(projectId ? { projectId } : {}),
+      ...(assigneeId ? { assigneeId } : {}),
+      ...(range ? { range } : {}),
+    }),
+    [assigneeId, projectId, range],
+  );
+
+  const load = useCallback(async () => {
+    if (nexus.isDemo === false && !isAuthenticated()) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      setAnalytics(await api.analytics.get(filters));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load analytics");
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, nexus.isDemo]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // The charts read from this page's copy, not from context, so a filter change
+  // does not need a full workspace reload.
+  const withAnalytics = useMemo(() => ({ ...nexus, analytics }), [analytics, nexus]);
+
+  const exportCsv = () => {
+    const rows: string[][] = [
+      ["Section", "Name", "Value"],
+      ...analytics.status.map((row) => ["Status", row.name, String(row.value)]),
+      ...analytics.workload.map((row) => ["Workload", row.name, String(row.tasks)]),
+      ...analytics.productivity.map((row) => ["Productivity", row.name, String(row.points)]),
+      ...analytics.progress.map((row) => [`Progress ${row.name}`, "planned", String(row.planned)]),
+      ...analytics.progress.map((row) => [
+        `Progress ${row.name}`,
+        "completed",
+        String(row.completed),
+      ]),
+    ];
+
+    // A quoted field, because a task name could contain the separator.
+    const escape = (cell: string) => `"${cell.replace(/"/g, '""')}"`;
+    const csv = rows.map((row) => row.map(escape).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `nexus-analytics-${projectId || "all"}-${range.replace(/\s+/g, "-")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    nexus.pushToast("Exported the figures currently shown", "success");
+  };
+
+  const projectOptions = ["", ...nexus.projects.map((project) => project.id)];
+  const projectLabels = ["All projects", ...nexus.projects.map((project) => project.name)];
+  const people = nexus.users.filter((user) => user.id !== nexus.currentUser.id || true);
+
   return (
     <AppShell title="Analytics">
       <div className="space-y-5">
@@ -1394,38 +1828,54 @@ export function AnalyticsPage() {
           title="Analytics"
           description="Completion rate, cycle time, workload, velocity, and activity trends."
           actions={
-            <Button onClick={() => nexus.pushToast("Export started", "info")}>
+            <Button onClick={exportCsv}>
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
           }
         />
         <div className="grid gap-3 lg:grid-cols-4">
+          {/*
+            This listed one hardcoded option and could not change. It now lists
+            the workspaces the caller actually belongs to, and switching reloads
+            so the figures below belong to the one that is selected.
+          */}
           <SelectField
-            label="Organization"
-            value={nexus.organization}
-            onChange={() => undefined}
-            options={[nexus.organization]}
+            label="Workspace"
+            value={nexus.organizationId ?? ""}
+            onChange={(next) => {
+              nexus.switchOrganization(next);
+              void nexus.reload();
+            }}
+            options={nexus.organizations.map((org) => org.id)}
+            optionLabels={nexus.organizations.map((org) => org.name)}
           />
           <SelectField
             label="Project"
-            value="All"
-            onChange={() => undefined}
+            value={projectId}
+            onChange={setProjectId}
             options={projectOptions}
+            optionLabels={projectLabels}
           />
           <SelectField
-            label="Team"
-            value="All"
-            onChange={() => undefined}
-            options={["All", ...Array.from(new Set(nexus.users.map((user) => user.department)))]}
+            label="Assignee"
+            value={assigneeId}
+            onChange={setAssigneeId}
+            options={["", ...people.map((user) => user.id)]}
+            optionLabels={["Everyone", ...people.map((user) => user.name)]}
           />
           <SelectField
             label="Date range"
-            value="30 days"
-            onChange={() => undefined}
+            value={range}
+            onChange={setRange}
             options={["7 days", "30 days", "90 days"]}
           />
         </div>
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             icon={<CheckCircle2 className="h-5 w-5" />}
@@ -1453,10 +1903,10 @@ export function AnalyticsPage() {
           />
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          <LineChartCard />
-          <ProductivityCard />
-          <WorkloadCard />
-          <DonutCard />
+          <LineChartCard analytics={analytics} />
+          <ProductivityCard analytics={analytics} />
+          <WorkloadCard analytics={analytics} />
+          <DonutCard analytics={analytics} />
         </div>
       </div>
     </AppShell>
@@ -1466,11 +1916,83 @@ export function AnalyticsPage() {
 export function AuditPage() {
   const nexus = useNexus();
   const [query, setQuery] = useState("");
-  const list = nexus.auditLogs.filter(
-    (log) =>
-      !query ||
-      `${log.user} ${log.action} ${log.resource}`.toLowerCase().includes(query.toLowerCase()),
+  const [date, setDate] = useState("All");
+  const [user, setUser] = useState("All");
+  const [action, setAction] = useState("All");
+
+  /*
+    These three were `() => undefined`, and the User and Action options were
+    hardcoded names that need not exist in the workspace: "Raj", "Amit",
+    "Admin", "Updated task", "Changed role". Both are derived from the loaded
+    logs now, and the date filter uses the real timestamp, because the display
+    one is a formatted string that cannot be compared.
+  */
+  const users = useMemo(
+    () => [...new Set(nexus.auditLogs.map((log) => log.user))].sort(),
+    [nexus.auditLogs],
   );
+  const actions = useMemo(
+    () => [...new Set(nexus.auditLogs.map((log) => log.action))].sort(),
+    [nexus.auditLogs],
+  );
+
+  const list = nexus.auditLogs.filter((log) => {
+    if (
+      query &&
+      !`${log.user} ${log.action} ${log.resource}`.toLowerCase().includes(query.toLowerCase())
+    ) {
+      return false;
+    }
+
+    if (user !== "All" && log.user !== user) {
+      return false;
+    }
+
+    if (action !== "All" && log.action !== action) {
+      return false;
+    }
+
+    if (date !== "All") {
+      const window = date === "Today" ? 1 : date === "7 days" ? 7 : 30;
+      const stamp = log.at ? new Date(log.at).getTime() : null;
+      const floor = startOfDay(new Date()).getTime() - (window - 1) * 86400000;
+
+      if (stamp === null || stamp < floor) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const exportCsv = () => {
+    const rows: string[][] = [
+      ["Timestamp", "User", "Action", "Resource", "IP", "Status", "Detail"],
+      ...list.map((log) => [
+        log.at ?? log.timestamp,
+        log.user,
+        log.action,
+        log.resource,
+        log.ip,
+        log.status,
+        log.detail,
+      ]),
+    ];
+    const escape = (cell: string) => `"${cell.replace(/"/g, '""')}"`;
+    const url = URL.createObjectURL(
+      new Blob([rows.map((row) => row.map(escape).join(",")).join("\r\n")], {
+        type: "text/csv;charset=utf-8",
+      }),
+    );
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "nexus-audit-logs.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    nexus.pushToast(`Exported ${list.length} audit entries`, "success");
+  };
+
   return (
     <AppShell title="Audit Logs">
       <div className="space-y-5">
@@ -1478,7 +2000,7 @@ export function AuditPage() {
           title="Audit Logs"
           description="Enterprise-grade visibility into user, role, project, and system changes."
           actions={
-            <Button>
+            <Button onClick={exportCsv}>
               <Download className="h-4 w-4" />
               Export
             </Button>
@@ -1488,21 +2010,16 @@ export function AuditPage() {
           <SearchInput value={query} onChange={setQuery} placeholder="Search audit logs" />
           <SelectField
             label="Date"
-            value="Today"
-            onChange={() => undefined}
-            options={["Today", "7 days", "30 days"]}
+            value={date}
+            onChange={setDate}
+            options={["All", "Today", "7 days", "30 days"]}
           />
-          <SelectField
-            label="User"
-            value="All"
-            onChange={() => undefined}
-            options={["All", "Raj", "Amit", "Admin"]}
-          />
+          <SelectField label="User" value={user} onChange={setUser} options={["All", ...users]} />
           <SelectField
             label="Action"
-            value="All"
-            onChange={() => undefined}
-            options={["All", "Updated task", "Changed role"]}
+            value={action}
+            onChange={setAction}
+            options={["All", ...actions]}
           />
         </div>
         <Card className="p-0">

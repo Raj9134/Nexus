@@ -1021,8 +1021,22 @@ export const api = {
   },
 
   analytics: {
-    async get(): Promise<Analytics> {
-      const payload = await request<unknown>("/analytics");
+    /**
+     * The figures are computed on the server, so the filters go with the
+     * request. Filtering in the client would leave the metric row disagreeing
+     * with the charts, and the route refuses a range it does not know.
+     */
+    async get(filters: { projectId?: string; assigneeId?: string; range?: string } = {}) {
+      const query = new URLSearchParams();
+
+      for (const [key, value] of Object.entries(filters)) {
+        if (value) {
+          query.set(key, value);
+        }
+      }
+
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const payload = await request<unknown>(`/analytics${suffix}`);
 
       return one<Analytics>(payload, "analytics", {
         progress: [],

@@ -72,8 +72,15 @@ cd backend
 npm run test:all          # contract, realtime, and invitation suites
 ```
 
-Individually: `npm test`, `npm run test:realtime`, `npm run test:invites`.
-`npm run test:e2e` drives a real browser and needs a running frontend too.
+Individually: `npm test`, `npm run test:realtime`, `npm run test:invites`,
+`npm run test:analytics`. `npm run test:e2e` drives a real browser and needs a
+running frontend too.
+
+`test:analytics` is the one suite that writes to Mongo directly. It has to:
+every task an HTTP request creates has `createdAt` of "now", so no date range
+could ever narrow anything and the range filter could not be proven through the
+API. It seeds backdated documents, calls `computeAnalytics` in process, and
+cleans up after itself.
 
 ### Frontend
 
@@ -84,7 +91,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-70 tests across six files. They focus on the failures that a type check
+120 tests across seven files. They focus on the failures that a type check
 cannot catch, because those were the ones that reached a browser:
 
 - `nexus-context.test.tsx` — hydration must never present the seed dataset as
@@ -107,6 +114,10 @@ cannot catch, because those were the ones that reached a browser:
 - `voice.test.tsx` — the recorder strips the codec suffix the backend's audio
   filter rejects, reports a whole number of seconds, releases the microphone,
   and the player fetches with the access token and revokes its object URL.
+- `calendar.test.ts` — the date arithmetic behind the calendar and the task
+  filters, including that a month grid is always whole weeks, that navigating a
+  year either way does not skip a month, and that `isOverdue` never calls an
+  undated task overdue.
 
 The frontend is also checked by `tsc --noEmit` and `eslint .`. CI runs all
 four.
@@ -151,6 +162,37 @@ without a mail server.
 
 The workspace switcher is hidden when a user has only one workspace, since a
 menu with a single entry cannot do anything.
+
+## Dates
+
+Display strings carry no year: a task's `dueDate` is `"Sep 22"`, a calendar
+event's `date` is `"Oct 5"`, and an audit entry's `timestamp` is already
+formatted. None of them can be compared or sorted across a year boundary, which
+is why the calendar and the task filters were pinned to literal values. Each
+also carries a real timestamp alongside it:
+
+| Displayed as            | Real timestamp          | Used by                   |
+| ----------------------- | ----------------------- | ------------------------- |
+| `CalendarEvent.dueDate` | `CalendarEvent.startAt` | the calendar grid         |
+| `Task.dueDate`          | `Task.dueOn`            | Overdue, Today, This week |
+| `AuditLog.timestamp`    | `AuditLog.at`           | the audit date filter     |
+
+`frontend/src/lib/calendar.ts` holds the date arithmetic, including
+`isOverdue`, `isDueToday`, `isDueThisWeek` and `isUpcoming`, all of which take
+an optional `now` so they can be tested against a fixed clock.
+
+## Analytics
+
+`GET /analytics` accepts `projectId`, `assigneeId` and `range`
+(`7 days`, `30 days`, `90 days`). A malformed value is a 400 rather than being
+ignored, because silently dropping a filter answers with unfiltered figures
+while the screen shows the filter as chosen.
+
+A range includes a task that was created inside the window, finished inside it,
+**or is due inside it**. The due date matters most: a task created today and due
+in six months should not appear in a 7-day view, and one due last week should.
+The set is decided once and every figure on the page uses it, so the status
+donut and the metric row cannot disagree.
 
 ## Files and attachments
 

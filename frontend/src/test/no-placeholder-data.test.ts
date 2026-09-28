@@ -234,6 +234,142 @@ describe("file controls", () => {
   });
 });
 
+describe("the calendar", () => {
+  /*
+    The page rendered a fixed "Sep 1" to "Sep 28" whatever today's date was,
+    with no way to reach another month, and placed events with
+    `event.date.endsWith(...)` plus a hand-written map of day numbers to event
+    titles: "Sprint Planning" on the 23rd, "Client Demo" on the 24th, and so on.
+    The backend only sent "Sep 15" with no year, so there was nothing to
+    compare against.
+  */
+  const pages = read(join(SRC, "pages", "AppPages.tsx"));
+
+  it("does not hardcode a month or a day count", () => {
+    expect(pages).not.toMatch(/>Sep \{/);
+    expect(pages).not.toMatch(/length:\s*view === "Day" \? 1 : view === "Week" \? 7 : 28/);
+  });
+
+  it("does not place events by matching a title against a day number", () => {
+    expect(pages).not.toContain('event.title === "Sprint Planning"');
+    expect(pages).not.toContain('event.title === "Client Demo"');
+    // The old matching compared a display string that carries no year.
+    expect(pages).not.toMatch(/event\.date\.endsWith\(/);
+  });
+
+  it("builds the grid from the real current date and can navigate", () => {
+    expect(pages).toContain("startOfDay(new Date())");
+    expect(pages).toContain("monthGrid(anchor)");
+    expect(pages).toContain("weekDays(anchor)");
+    expect(pages).toContain("addMonths(current, direction)");
+    expect(pages).toContain("addDays(current, direction * 7)");
+  });
+
+  it("creates an event through the API, not the shared fake modal", () => {
+    expect(pages).toContain("api.calendar.create(");
+    // The shared modal's submit() set a timer and printed a toast.
+    expect(pages).not.toContain('openModal("event")');
+  });
+});
+
+describe("the analytics page", () => {
+  const pages = read(join(SRC, "pages", "AppPages.tsx"));
+
+  /*
+    All four dropdowns were wired to `() => undefined`, so choosing a project or
+    a date range left the page exactly as it was while looking like a filter.
+  */
+  it("has no filter that cannot change anything", () => {
+    const dead = pages.match(/onChange=\{\(\) => undefined\}/g) ?? [];
+
+    // Zero, not one: every dropdown either changes state or was removed. A
+    // single-valued filter is better shown as text than as a dead control.
+    expect(dead, "a dropdown that cannot change anything").toHaveLength(0);
+  });
+
+  it("sends the filters to the server rather than filtering the screen", () => {
+    expect(pages).toContain("api.analytics.get(filters)");
+  });
+
+  it("exports what is on screen instead of claiming to", () => {
+    expect(pages).toContain("text/csv");
+    expect(pages).not.toContain("Export started");
+  });
+
+  /*
+    WorkloadCard and ProductivityCard divided by a max that is 0 for a range with
+    nothing in it, writing NaN% into a style attribute. LineChartCard and
+    DonutCard already guarded this; these two did not.
+  */
+  it("guards the bars against a zero maximum", () => {
+    expect(pages).toContain("const max = Math.max(0, ...analytics.workload.map");
+    expect(pages).toContain("const max = Math.max(0, ...analytics.productivity.map");
+  });
+
+  it("describes the line chart from its own data", () => {
+    // A screen reader read out "from 38 to 88 tasks over six weeks" whatever the
+    // page actually showed.
+    expect(pages).not.toContain("increased from 38 to 88");
+  });
+});
+
+describe("the task and audit filters", () => {
+  /*
+    The Tasks page pinned Overdue to `task.id === "NEX-183"` and Today to
+    `["Sep 22", "Sep 24"].includes(task.dueDate)`, so both tabs showed one
+    hardcoded task whatever the workspace held. The Audit page's Date, User and
+    Action dropdowns were all `() => undefined`, and the User options were
+    literal names -- "Raj", "Amit", "Admin" -- that need not exist.
+  */
+  const pages = read(join(SRC, "pages", "AppPages.tsx"));
+
+  it("does not pin a filter to one record", () => {
+    expect(pages).not.toContain('task.id === "NEX-183"');
+    expect(pages).not.toMatch(/\["Sep 22", "Sep 24"\]/);
+  });
+
+  it("compares real due dates, not display strings", () => {
+    expect(pages).toContain("isOverdue(task.dueOn)");
+    expect(pages).toContain("isDueToday(task.dueOn)");
+    expect(pages).toContain("isDueThisWeek(task.dueOn)");
+  });
+
+  it("derives the audit filter options from the logs", () => {
+    expect(pages).not.toContain('"Raj", "Amit", "Admin"');
+    expect(pages).not.toContain('"Updated task", "Changed role"');
+    expect(pages).toContain("nexus.auditLogs.map((log) => log.user)");
+    expect(pages).toContain("nexus.auditLogs.map((log) => log.action)");
+  });
+
+  it("exports the audit list instead of a button that does nothing", () => {
+    // The Export button had no onClick at all.
+    expect(pages).toContain("nexus-audit-logs.csv");
+  });
+});
+
+describe("task assignment", () => {
+  /*
+    The task drawer's Assign button pushed a toast that said "Assign menu
+    opened" and offered no menu, so a task could not be given an owner from the
+    app at all, even though PATCH /tasks/:id has always accepted assignedTo.
+  */
+  const shell = read(join(SRC, "components", "nexus", "AppShell.tsx"));
+
+  it("does not claim to open a menu it does not have", () => {
+    expect(shell).not.toContain("Assign menu opened");
+  });
+
+  it("assigns through the API", () => {
+    expect(shell).toContain("api.tasks.update(taskId, { assignedTo: userId })");
+  });
+
+  it("offers the project's own members, which is who the backend accepts", () => {
+    // Anything else is refused with "Assigned user must be a member of this
+    // project", so offering the whole team would just produce errors.
+    expect(shell).toContain("memberIds.has(user.id)");
+  });
+});
+
 describe("the brand mark", () => {
   const primitives = read(join(SRC, "components", "nexus", "primitives.tsx"));
   const root = read(join(SRC, "routes", "__root.tsx"));

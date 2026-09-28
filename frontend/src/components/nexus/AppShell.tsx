@@ -949,6 +949,31 @@ function GlobalModals() {
 function TaskDetailDrawer() {
   const nexus = useNexus();
   const task = nexus.selectedTask;
+  const [assignError, setAssignError] = useState<string | null>(null);
+
+  /*
+    The project's own members, because the backend refuses anyone else with
+    "Assigned user must be a member of this project". The team list supplies the
+    names and the project carries the ids, so the two are joined here.
+  */
+  const project = nexus.projects.find((item) => item.id === task?.projectId);
+  const memberIds = new Set(project?.members ?? []);
+  const assignable = nexus.users.filter((user) => memberIds.has(user.id));
+
+  const assignTask = async (taskId: string, userId: string) => {
+    setAssignError(null);
+
+    try {
+      await api.tasks.update(taskId, { assignedTo: userId });
+      nexus.pushToast("Assignee updated", "success");
+      await nexus.reload();
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not reassign the task";
+      setAssignError(message);
+      nexus.pushToast(message, "error");
+    }
+  };
+
   if (!task) return null;
   return (
     <Drawer open title={`${task.id} · ${task.status}`} onClose={nexus.closeTask} wide>
@@ -1046,9 +1071,26 @@ function TaskDetailDrawer() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => nexus.pushToast("Task edit mode opened", "info")}>Edit</Button>
-          <Button variant="secondary" onClick={() => nexus.pushToast("Assign menu opened", "info")}>
-            Assign
-          </Button>
+          {/*
+            This was a toast that said "Assign menu opened" and offered no menu,
+            so a task could not be given an owner from the app at all, even
+            though PATCH /tasks/:id has always accepted assignedTo. The options
+            are the project's own members, because the backend refuses anyone
+            else: "Assigned user must be a member of this project".
+          */}
+          <SelectField
+            label="Assign to"
+            value={task.assigneeId ?? ""}
+            onChange={(next) => {
+              if (!next) {
+                return;
+              }
+
+              void assignTask(task.id, next);
+            }}
+            options={["", ...assignable.map((user) => user.id)]}
+            optionLabels={["Unassigned", ...assignable.map((user) => user.name)]}
+          />
           <Button
             variant="secondary"
             onClick={() =>
@@ -1061,6 +1103,11 @@ function TaskDetailDrawer() {
             Delete
           </Button>
         </div>
+        {assignError ? (
+          <p role="alert" className="text-xs text-destructive">
+            {assignError}
+          </p>
+        ) : null}
       </div>
     </Drawer>
   );

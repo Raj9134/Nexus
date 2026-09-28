@@ -119,12 +119,23 @@ const values = (label, object, keys) => {
 // Exact key sets from types/nexus.ts
 const USER = ["id", "name", "email", "role", "department", "avatar", "status", "activeTasks", "completed", "workload", "projects", "completionRate"];
 const PROJECT = ["id", "name", "key", "description", "progress", "members", "tasks", "completed", "due", "status", "icon"];
-const TASK = ["id", "title", "description", "projectId", "project", "priority", "status", "assigneeId", "assignee", "reporter", "dueDate", "labels", "comments", "attachments", "checklist", "activity"];
+const TASK = ["id", "title", "description", "projectId", "project", "priority", "status", "assigneeId", "assignee", "reporter", "dueDate", "dueOn", "labels", "comments", "attachments", "checklist", "activity"];
 const MESSAGE = ["id", "channel", "authorId", "body", "time", "reactions", "edited", "messageType", "audioUrl", "duration", "fileId"];
 const FILE = ["id", "name", "type", "owner", "size", "modified", "folder"];
 const NOTIFICATION = ["id", "title", "body", "category", "time", "read"];
-const EVENT = ["id", "title", "date", "time", "type", "attendees", "notes"];
-const AUDIT = ["id", "timestamp", "user", "action", "resource", "ip", "status", "detail"];
+/*
+    startAt is what a calendar grid is built from. `date` is "Oct 5" and carries
+    no year, so without this the client could not place an event on a day and
+    the page had to fake it with a hardcoded map of day numbers to titles.
+*/
+const EVENT = ["id", "title", "date", "time", "type", "attendees", "notes", "startAt"];
+/*
+    dueOn and at are the real timestamps behind the display strings. dueDate is
+    "Sep 22" and timestamp is already formatted, and neither carries a year,
+    which is why the Tasks page pinned Overdue to `task.id === "NEX-183"` and
+    Today to a literal pair of dates.
+*/
+const AUDIT = ["id", "timestamp", "at", "user", "action", "resource", "ip", "status", "detail"];
 
 const CALL_PARTY = ["id", "name", "email"];
 const CALL = ["id", "caller", "receiver", "status", "startedAt", "endedAt", "duration", "createdAt"];
@@ -229,6 +240,7 @@ const report = () => {
         status: "In Progress",
         priority: "High",
         description: "Wire sockets",
+        dueDate: "2026-09-22T17:00:00.000Z",
         checklist: [{ id: "c1", label: "Scaffold", done: false }]
     });
     check("create task", taskRes.status, 201);
@@ -240,6 +252,25 @@ const report = () => {
     check("Task.priority canonical", ["Low", "Medium", "High", "Critical"].includes(task.priority), true);
     check("Task.comments is array", Array.isArray(task.comments), true);
     check("Task.attachments numeric", typeof task.attachments, "number");
+    // dueOn is what the Overdue and Today filters compare. dueDate alone is
+    // "Sep 22" and cannot be told apart from any other year's September.
+    check("Task.dueOn is a real timestamp", /^\d{4}-\d{2}-\d{2}T/.test(String(task.dueOn)), true);
+    // The two representations must agree, or a task would appear on one day in
+    // the table and under a different filter.
+    {
+        const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const due = new Date(task.dueOn);
+        const shown = `${MONTHS[due.getUTCMonth()]} ${String(due.getUTCDate()).padStart(2, "0")}`;
+
+        check("Task.dueOn and Task.dueDate agree", task.dueDate, shown);
+        // The year the display string omits, so the client can sort and filter.
+        check("Task.dueOn carries the year", due.getUTCFullYear(), 2026);
+    }
+    // A task with no due date must report null, not an epoch date that would
+    // read as 1970 and land in the Overdue tab.
+    const undated = await call("POST", "/tasks", token, { title: "No deadline", projectId });
+    check("a task with no due date reports dueOn null", undated.data.task.dueOn, null);
+    check("a task with no due date reports an empty dueDate", undated.data.task.dueDate, "");
     check("Task.checklist preserved", task.checklist[0] && task.checklist[0].label, "Scaffold");
     check("Task.reporter non-empty", task.reporter.length > 0, true);
     check("Task.project is name string", typeof task.project === "string" && task.project.length > 0, true);
@@ -456,6 +487,8 @@ const report = () => {
     check("CalendarEvent.type canonical", ["Meeting", "Deadline", "Review", "Planning"].includes(eventRes.data.event.type), true);
     check("CalendarEvent.date zero padded day", /05$/.test(eventRes.data.event.date), true);
     check("CalendarEvent.attendees is string[]", Array.isArray(eventRes.data.event.attendees), true);
+    check("CalendarEvent.startAt is a real timestamp", eventRes.data.event.startAt, "2026-10-05T14:30:00.000Z");
+    check("startAt carries the year the display date omits", new Date(eventRes.data.event.startAt).getUTCFullYear(), 2026);
     check("bad event type rejected", (await call("POST", "/calendar", token, { title: "X", startAt: "2026-10-05T10:00:00.000Z", type: "Party" })).status, 400);
     check("missing startAt rejected", (await call("POST", "/calendar", token, { title: "X", type: "Meeting" })).status, 400);
     check("bad event id -> 404 not 500", (await call("GET", "/calendar/not-an-id", token)).status, 404);
@@ -471,6 +504,37 @@ const report = () => {
     check("status totals equal task total", analytics.data.analytics.status.reduce((sum, s) => sum + s.value, 0), analytics.data.analytics.metrics.activeTasks + analytics.data.analytics.metrics.completedTasks);
     shape("progress point", analytics.data.analytics.progress[0] || { name: "", planned: 0, completed: 0 }, ["name", "planned", "completed"]);
     shape("workload point", analytics.data.analytics.workload[0] || { name: "", tasks: 0 }, ["name", "tasks"]);
+
+    /*
+      Analytics filters. The page had four dropdowns wired to `() => undefined`,
+      so choosing a project or a date range changed nothing. The figures are
+      computed server-side, so the filter has to be applied there or the metric
+      row and the charts would disagree with each other.
+    */
+    const filteredProject = await call("GET", `/analytics?projectId=${projectId}`, token);
+    check("GET /analytics?projectId", filteredProject.status, 200);
+    check("a project filter narrows to one project", filteredProject.data.analytics.metrics.totalProjects, 1);
+    check("a project filter never reports more than the unfiltered total", filteredProject.data.analytics.metrics.totalProjects <= analytics.data.analytics.metrics.totalProjects, true);
+
+    const filteredRange = await call("GET", "/analytics?range=7%20days", token);
+    check("GET /analytics?range", filteredRange.status, 200);
+    check("a range never reports more than no range", filteredRange.data.analytics.metrics.completedTasks <= analytics.data.analytics.metrics.completedTasks, true);
+    check("a range keeps the status and metrics in step", filteredRange.data.analytics.status.reduce((sum, s) => sum + s.value, 0), filteredRange.data.analytics.metrics.activeTasks + filteredRange.data.analytics.metrics.completedTasks);
+
+    const filteredAssignee = await call("GET", `/analytics?assigneeId=${mateId}`, token);
+    check("GET /analytics?assigneeId", filteredAssignee.status, 200);
+    check("an assignee filter keeps the status and metrics in step", filteredAssignee.data.analytics.status.reduce((sum, s) => sum + s.value, 0), filteredAssignee.data.analytics.metrics.activeTasks + filteredAssignee.data.analytics.metrics.completedTasks);
+
+    check("an unknown range is refused, not ignored", (await call("GET", "/analytics?range=last%20fortnight", token)).status, 400);
+    check("analytics is refused when signed out", (await call("GET", "/analytics", null)).status, 401);
+    // A project the caller cannot see is an empty result, not someone else's numbers.
+    const foreignFilter = await call("GET", `/analytics?projectId=${projectId}`, outsiderToken);
+    check("a project the caller cannot see yields nothing", foreignFilter.data.analytics.metrics.totalProjects, 0);
+    check("a filtered empty project still returns the full shape", foreignFilter.data.analytics.status.length, 5);
+    // A malformed id must not be silently ignored, which would answer with
+    // unfiltered figures while the screen showed a filter as chosen.
+    check("a malformed project id is refused", (await call("GET", "/analytics?projectId=not-an-id", token)).status, 400);
+    check("a malformed assignee id is refused", (await call("GET", "/analytics?assigneeId=not-an-id", token)).status, 400);
 
     const team = await call("GET", "/team", token);
     check("GET /team", team.status, 200);
@@ -629,6 +693,9 @@ const report = () => {
     if (auditLogs.data.logs.length) {
         shape("AuditLog contract", auditLogs.data.logs[0], AUDIT);
         check("AuditLog.status canonical", ["Success", "Warning", "Blocked"].includes(auditLogs.data.logs[0].status), true);
+        // What the Audit page's Date filter compares, since `timestamp` is
+        // already formatted and carries no machine-readable date.
+        check("AuditLog.at is a real timestamp", /^\d{4}-\d{2}-\d{2}T/.test(String(auditLogs.data.logs[0].at)), true);
     }
     check("outsider audit logs scoped away", (await call("GET", "/audit-logs", outsiderToken)).status, 200);
 

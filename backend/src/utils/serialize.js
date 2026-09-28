@@ -137,6 +137,14 @@ function serializeTask(task, context = {}) {
         assigneeId: idOf(task.assignedTo),
         assignee: context.assigneeName || "",
         reporter: context.reporterName || "",
+        /*
+            dueDate is "Sep 22" and carries no year, so the Tasks page could not
+            tell an overdue task from one due next year. It worked around this
+            with `task.id === "NEX-183"` for Overdue and a literal list of two
+            dates for Today, which is why those filters were pinned to specific
+            records. The real date is what makes them work.
+        */
+        dueOn: task.dueDate ? new Date(task.dueDate).toISOString() : null,
         dueDate: shortDate(task.dueDate),
         labels: task.labels || [],
         comments: context.comments || [],
@@ -219,6 +227,14 @@ function serializeEvent(event) {
     return {
         id: idOf(event),
         title: event.title || "",
+        /*
+            `date` and `time` are for display only: "Sep 15" carries no year, so
+            a client cannot place an event on a calendar or sort across a year
+            boundary with them. The calendar page had been faking placement with
+            a hardcoded map of day numbers to event titles because of this. The
+            full timestamp is what actually locates the event.
+        */
+        startAt: event.startAt ? new Date(event.startAt).toISOString() : null,
         date: shortDate(event.startAt),
         time: time12(event.startAt),
         type: event.type || "Meeting",
@@ -235,6 +251,12 @@ function serializeAuditLog(log, userName) {
     return {
         id: idOf(log),
         timestamp: auditTimestamp(log.createdAt),
+        /*
+            The same reason as a calendar event: the display timestamp is a
+            formatted string, and a Date filter that cannot be compared to a
+            real date either has to be pinned to a literal or removed.
+        */
+        at: log.createdAt ? new Date(log.createdAt).toISOString() : null,
         user: userName || log.userName || "System",
         action: log.action || "",
         resource: log.resource || "",

@@ -213,6 +213,7 @@ export const tasks: Task[] = [
     assignee: "Raj Kumar Mishra",
     reporter: "Priya Sharma",
     dueDate: "Sep 24",
+    dueOn: "2026-09-24T17:00:00.000Z",
     labels: ["Backend", "Security"],
     attachments: 3,
     checklist: [
@@ -249,6 +250,7 @@ export const tasks: Task[] = [
     assignee: "Amit Verma",
     reporter: "Raj Kumar Mishra",
     dueDate: "Sep 28",
+    dueOn: "2026-09-28T17:00:00.000Z",
     labels: ["Backend", "Payments"],
     attachments: 3,
     checklist: [
@@ -278,6 +280,7 @@ export const tasks: Task[] = [
     assignee: "Raj Kumar Mishra",
     reporter: "Amit Verma",
     dueDate: "Sep 25",
+    dueOn: "2026-09-25T17:00:00.000Z",
     labels: ["Payments"],
     attachments: 1,
     checklist: [
@@ -299,6 +302,7 @@ export const tasks: Task[] = [
     assignee: "Amit Verma",
     reporter: "Neha Iyer",
     dueDate: "Sep 26",
+    dueOn: "2026-09-26T17:00:00.000Z",
     labels: ["Frontend", "Dashboard"],
     attachments: 2,
     checklist: [
@@ -327,6 +331,7 @@ export const tasks: Task[] = [
     assignee: "Priya Sharma",
     reporter: "Raj Kumar Mishra",
     dueDate: "Sep 20",
+    dueOn: "2026-09-20T17:00:00.000Z",
     labels: ["Compliance"],
     attachments: 0,
     checklist: [
@@ -348,6 +353,7 @@ export const tasks: Task[] = [
     assignee: "Raj Kumar Mishra",
     reporter: "Sara Thomas",
     dueDate: "Sep 22",
+    dueOn: "2026-09-22T17:00:00.000Z",
     labels: ["Security", "QA"],
     attachments: 2,
     checklist: [
@@ -376,6 +382,7 @@ export const tasks: Task[] = [
     assignee: "Rahul Singh",
     reporter: "Priya Sharma",
     dueDate: "Oct 01",
+    dueOn: "2026-10-01T17:00:00.000Z",
     labels: ["Mobile", "Security"],
     attachments: 1,
     checklist: [
@@ -397,6 +404,7 @@ export const tasks: Task[] = [
     assignee: "Arjun Mehta",
     reporter: "Raj Kumar Mishra",
     dueDate: "Oct 05",
+    dueOn: "2026-10-05T17:00:00.000Z",
     labels: ["Docs"],
     attachments: 4,
     checklist: [
@@ -547,6 +555,7 @@ export const calendarEvents: CalendarEvent[] = [
     id: "e1",
     title: "Sprint Planning",
     date: "Sep 23",
+    startAt: "2026-09-23T09:00:00.000Z",
     time: "10:00 AM",
     type: "Planning",
     attendees: ["Raj", "Priya", "Amit"],
@@ -556,6 +565,7 @@ export const calendarEvents: CalendarEvent[] = [
     id: "e2",
     title: "Client Demo",
     date: "Sep 24",
+    startAt: "2026-09-24T09:00:00.000Z",
     time: "3:00 PM",
     type: "Meeting",
     attendees: ["Raj", "Neha", "Rahul"],
@@ -565,6 +575,7 @@ export const calendarEvents: CalendarEvent[] = [
     id: "e3",
     title: "Backend Review",
     date: "Sep 25",
+    startAt: "2026-09-25T09:00:00.000Z",
     time: "11:30 AM",
     type: "Review",
     attendees: ["Raj", "Amit", "Sara"],
@@ -574,6 +585,7 @@ export const calendarEvents: CalendarEvent[] = [
     id: "e4",
     title: "Project Deadline",
     date: "Oct 12",
+    startAt: "2026-10-12T09:00:00.000Z",
     time: "5:00 PM",
     type: "Deadline",
     attendees: ["Payment Platform"],
@@ -583,6 +595,7 @@ export const calendarEvents: CalendarEvent[] = [
     id: "e5",
     title: "Team Meeting",
     date: "Sep 26",
+    startAt: "2026-09-26T09:00:00.000Z",
     time: "4:30 PM",
     type: "Meeting",
     attendees: ["Engineering"],
@@ -594,6 +607,7 @@ export const auditLogs: AuditLog[] = [
   {
     id: "a1",
     timestamp: "2026-09-21 15:42",
+    at: "2026-09-28T12:00:00.000Z",
     user: "Raj Kumar Mishra",
     action: "Updated task",
     resource: "NEX-124",
@@ -604,6 +618,7 @@ export const auditLogs: AuditLog[] = [
   {
     id: "a2",
     timestamp: "2026-09-21 15:10",
+    at: "2026-09-28T12:00:00.000Z",
     user: "Amit Verma",
     action: "Changed permissions",
     resource: "Payment Platform",
@@ -614,6 +629,7 @@ export const auditLogs: AuditLog[] = [
   {
     id: "a3",
     timestamp: "2026-09-21 14:55",
+    at: "2026-09-28T12:00:00.000Z",
     user: "Admin",
     action: "Invited member",
     resource: "Priya Sharma",
@@ -624,6 +640,7 @@ export const auditLogs: AuditLog[] = [
   {
     id: "a4",
     timestamp: "2026-09-21 13:22",
+    at: "2026-09-28T12:00:00.000Z",
     user: "Sara Thomas",
     action: "Blocked login",
     resource: "Unknown device",
@@ -634,6 +651,7 @@ export const auditLogs: AuditLog[] = [
   {
     id: "a5",
     timestamp: "2026-09-20 18:12",
+    at: "2026-09-28T12:00:00.000Z",
     user: "Raj Kumar Mishra",
     action: "Changed role",
     resource: "Rahul Singh",

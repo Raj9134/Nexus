@@ -10,6 +10,8 @@ const CalendarEvent = require("../models/CalendarEvent");
 const Notification = require("../models/Notification");
 const AuditLog = require("../models/AuditLog");
 
+const { isValidObjectId } = require("./permissionService");
+
 const {
     serializeUser,
     serializeProject,
@@ -496,9 +498,30 @@ const listAuditLogs = async (user, { limit = AUDIT_LIMIT } = {}) => {
     return logs.map((log) => serializeAuditLog(log, log.user ? log.user.name : log.userName));
 };
 
-const computeAnalytics = async (user) => {
-    const projectIds = await accessibleProjectIds(user);
+/*
+    The Analytics page had four filter dropdowns wired to `() => undefined`, so
+    choosing a project or a date range changed nothing on screen. The figures
+    are computed here, which means filtering has to happen here too rather than
+    in the client, or the totals would not add up to what the server reported.
+*/
+const RANGE_DAYS = { "7 days": 7, "30 days": 30, "90 days": 90 };
+
+/** The accepted values, so the route can refuse anything else. */
+const ANALYTICS_RANGES = Object.keys(RANGE_DAYS);
+
+const computeAnalytics = async (user, filters = {}) => {
+    let projectIds = await accessibleProjectIds(user);
     const organizationIds = await accessibleOrganizationIds(user);
+
+    // A project the caller cannot see is not an error, it is an empty result.
+    if (isValidObjectId(filters.projectId)) {
+        // accessibleProjectIds hands back ObjectIds, so the comparison has to go
+        // through idOf rather than === against a string.
+        const wanted = idOf(filters.projectId);
+        const visible = projectIds.some((id) => idOf(id) === wanted);
+
+        projectIds = visible ? [filters.projectId] : [];
+    }
 
     if (!projectIds.length) {
         return {
@@ -518,7 +541,28 @@ const computeAnalytics = async (user) => {
         };
     }
 
-    const tasks = await Task.find({ project: { $in: projectIds } })
+    const taskQuery = { project: { $in: projectIds } };
+
+    if (isValidObjectId(filters.assigneeId)) {
+        taskQuery.assignedTo = idOf(filters.assigneeId);
+    }
+
+    /*
+        The range is applied to when a task counts, not to a stored date field:
+        anything still open and created inside the window, plus anything
+        completed inside it. A task created last year and finished yesterday is
+        genuinely part of this month's throughput, and a date-range filter that
+        hid it would under-report the very thing the page measures.
+    */
+    const rangeDays = RANGE_DAYS[filters.range];
+
+    let windowStart = null;
+
+    if (rangeDays) {
+        windowStart = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
+    }
+
+    const tasks = await Task.find(taskQuery)
         .select("status priority dueDate completedAt createdAt assignedTo");
 
     const statusCounts = new Map(TASK_STATUSES.map((status) => [status, 0]));
@@ -530,7 +574,46 @@ const computeAnalytics = async (user) => {
     let cycleTotal = 0;
     let cycleSamples = 0;
 
+    /*
+        Decided once, for every figure on the page. The status donut, the
+        workload bars, the weekly progress line and the metrics all iterate the
+        same task list, so if the range were applied in only one of them the
+        totals would disagree with each other on screen.
+    */
+    const inRange = new Set();
+
     for (const task of tasks) {
+        if (!windowStart) {
+            inRange.add(idOf(task._id));
+            continue;
+        }
+
+        /*
+            In range when the task was created inside the window, or finished
+            inside it, or is due inside it. The due date matters most: a task
+            created today and due in six months should not appear in a "7 days"
+            view, and one due last week should, even though it is still open.
+            Leaving dueDate out made the filter change nothing at all for open
+            work, which is the failure this is fixing.
+        */
+        const createdAt = task.createdAt ? new Date(task.createdAt) : null;
+        const completedAt = task.completedAt ? new Date(task.completedAt) : null;
+        const dueAt = task.dueDate ? new Date(task.dueDate) : null;
+
+        if (
+            (createdAt && createdAt >= windowStart) ||
+            (completedAt && completedAt >= windowStart) ||
+            (dueAt && dueAt >= windowStart)
+        ) {
+            inRange.add(idOf(task._id));
+        }
+    }
+
+    for (const task of tasks) {
+        if (!inRange.has(idOf(task._id))) {
+            continue;
+        }
+
         const status = normalizeTaskStatus(task.status);
 
         statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
@@ -567,7 +650,7 @@ const computeAnalytics = async (user) => {
         let completed = 0;
 
         for (const task of tasks) {
-            if (!task.dueDate) {
+            if (!task.dueDate || !inRange.has(idOf(task._id))) {
                 continue;
             }
 
@@ -604,7 +687,7 @@ const computeAnalytics = async (user) => {
         let points = 0;
 
         for (const task of tasks) {
-            if (!task.completedAt) {
+            if (!task.completedAt || !inRange.has(idOf(task._id))) {
                 continue;
             }
 
@@ -759,5 +842,6 @@ module.exports = {
     taskView,
     userStats,
     serializeUserWithRole,
+    ANALYTICS_RANGES,
     uniqueIds
 };
