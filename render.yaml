@@ -59,7 +59,16 @@ services:
     runtime: node
     plan: free
     rootDir: frontend
-    buildCommand: npm ci && npm run build
+    # npm install, not npm ci. The toolchain is full of native addons --
+    # esbuild, rollup, lightningcss, @tailwindcss/oxide, oxc-parser, rolldown --
+    # and each ships one prebuilt binary per platform as an optional dependency.
+    # npm ci installs exactly the entries the lock file names, so a lock
+    # resolved on one platform leaves the others without their binary and the
+    # build dies on a bare "Cannot find module ../lightningcss.linux-x64-gnu.node".
+    # npm install resolves optional deps against the platform it runs on, which
+    # is the only thing that can satisfy a cross-platform build from a lock.
+    # The lock is still committed and still pins every version.
+    buildCommand: npm install && node node_modules/vite/bin/vite.js build
     startCommand: node .output/server/index.mjs
     healthCheckPath: /
     autoDeploy: true
