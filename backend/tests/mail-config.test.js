@@ -151,6 +151,76 @@ const RESEND = {
     }
 
     /*
+        An unwritable UPLOAD_DIR killed the process rather than failing an
+        upload. UPLOAD_DIR pointed at /var/data, which does not exist on a host
+        with no disk mounted, and mkdirSync threw inside multer's destination
+        callback. Express never sees that throw, so the service died: every file
+        and voice upload came back empty with a 502, while login, /health and
+        every test carried on passing, because none of them touch the disk.
+
+        The root is chosen once at load and probed for writability, so an
+        unusable path degrades to "files do not survive a restart" instead of
+        "the API is down".
+    */
+    const storageSource = readFileSync(
+        path.join(backend, "src", "config", "storage.js"),
+        "utf8"
+    );
+
+    check(
+        "an unwritable UPLOAD_DIR is probed, not assumed",
+        /canCreate|resolveUploadRoot/.test(storageSource) && /accessSync/.test(storageSource),
+        true
+    );
+    check(
+        "an unusable UPLOAD_DIR falls back instead of throwing at load",
+        /falling back to/.test(storageSource),
+        true
+    );
+
+    // Exercise it for real, in a child process so a throw cannot take the
+    // suite with it.
+    const { spawnSync } = require("child_process");
+    const probeStorage = (uploadDir) => {
+        const result = spawnSync(
+            process.execPath,
+            [
+                "-e",
+                'const s = require("./src/config/storage");' +
+                    "console.log(s.UPLOAD_ROOT || s.AUDIO_ROOT);"
+            ],
+            {
+                cwd: backend,
+                encoding: "utf8",
+                env: { ...process.env, UPLOAD_DIR: uploadDir }
+            }
+        );
+
+        return {
+            alive: result.status === 0,
+            root: (result.stdout || "").trim().split("\n").pop() || ""
+        };
+    };
+
+    // A path under a file can never be created, on any platform.
+    const impossible = path.join(backend, "package.json", "not-a-dir", "uploads");
+    const fellBack = probeStorage(impossible);
+
+    check("an impossible UPLOAD_DIR does not kill the process", fellBack.alive, true);
+    check(
+        "and it resolves to a writable location instead",
+        fellBack.alive && !fellBack.root.includes("not-a-dir"),
+        true
+    );
+
+    const honored = probeStorage(path.join(backend, ".probe-uploads"));
+
+    check("a writable UPLOAD_DIR is still honoured", honored.alive && honored.root.includes(".probe-uploads"), true);
+
+    const fsProbe = require("fs");
+    fsProbe.rmSync(path.join(backend, ".probe-uploads"), { recursive: true, force: true });
+
+    /*
         The CORS allow-list existed twice, reading different variables. app.js
         read CORS_ORIGINS and fell back to a hardcoded localhost list; server.js
         read CLIENT_ORIGIN. So setting CLIENT_ORIGIN -- what the deploy guide

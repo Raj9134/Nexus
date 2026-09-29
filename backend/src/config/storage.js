@@ -7,10 +7,56 @@ const path = require("path");
     vanish on the next deploy or restart. UPLOAD_DIR points the whole tree at a
     mounted volume instead, which is what makes the file and voice features
     survive a restart.
+
+    But UPLOAD_DIR can name a path the process cannot create -- on a host where
+    the root filesystem is read-only, /var/data does not exist until a disk is
+    mounted and mkdirSync throws EACCES or ENOENT. That throw happened inside
+    multer's destination callback, which Express never sees, so the process died
+    outright: every file and voice upload returned an empty reply and a 502, and
+    a single misconfigured variable took down sign-in-adjacent features rather
+    than failing them. The path is probed once here, and an unusable one falls
+    back to the directory that is known to be writable, so the worst outcome is
+    files not surviving a redeploy rather than the service not running.
 */
-const UPLOAD_ROOT = process.env.UPLOAD_DIR
-    ? path.resolve(process.env.UPLOAD_DIR)
-    : path.resolve(__dirname, "..", "..", "uploads");
+const defaultUploadRoot = path.resolve(__dirname, "..", "..", "uploads");
+
+const canCreate = (directory) => {
+    try {
+        fs.mkdirSync(directory, { recursive: true });
+        fs.accessSync(directory, fs.constants.W_OK);
+        return true;
+    } catch (error) {
+        return false;
+    }
+};
+
+const resolveUploadRoot = () => {
+    if (!process.env.UPLOAD_DIR) {
+        return defaultUploadRoot;
+    }
+
+    const configured = path.resolve(process.env.UPLOAD_DIR);
+
+    if (canCreate(configured)) {
+        return configured;
+    }
+
+    if (canCreate(defaultUploadRoot)) {
+        console.warn(
+            `[storage] UPLOAD_DIR "${process.env.UPLOAD_DIR}" is not writable here, ` +
+            `falling back to ${defaultUploadRoot}. Files will not survive a restart ` +
+            `until the path is corrected or a disk is mounted.`
+        );
+
+        return defaultUploadRoot;
+    }
+
+    throw new Error(
+        "No writable upload directory: UPLOAD_DIR and the project default are both unwritable"
+    );
+};
+
+const UPLOAD_ROOT = resolveUploadRoot();
 
 const AUDIO_ROOT = path.join(UPLOAD_ROOT, "audio");
 
