@@ -1000,6 +1000,24 @@ function MessagesPanel({
   const nexus = useNexus();
   const [active, setActive] = useState(channel);
   /*
+    Deduplicated presence. The socket appends on connect and the initial fetch
+    also returns online members, so a person who was already present shows up
+    twice during a reconnect, and a duplicate row is a second dead end: both
+    would open the same drawer, and React would warn about the repeated key.
+  */
+  const onlineUsers = useMemo(() => {
+    const seen = new Set<string>();
+
+    return nexus.users.filter((user) => {
+      if (user.status !== "Online" || seen.has(user.id)) {
+        return false;
+      }
+
+      seen.add(user.id);
+      return true;
+    });
+  }, [nexus.users]);
+  /*
     Read ?peer= from the URL so a profile drawer can open the conversation with
     that person. It used to show an "Opened a chat with ..." toast and select
     nobody, so the Message button went nowhere. This router version has no
@@ -1207,17 +1225,59 @@ function MessagesPanel({
         <Card>
           <h2 className="font-display text-lg font-semibold">Online users</h2>
           <div className="mt-4 space-y-3">
-            {nexus.users
-              .filter((user) => user.status === "Online")
-              .map((user) => (
-                <div key={user.id} className="flex items-center gap-3">
+            {onlineUsers.map((user) => {
+              /*
+                This row used to be a plain div. It looked like a list of people
+                you could reach -- it is titled "Online users", it shows their
+                presence, and it sits on the messages page -- but clicking did
+                nothing, because nothing was bound to it. The drawer with the
+                message and call buttons was only reachable from the team page,
+                so on the one screen where you go to talk to someone, the
+                obvious thing to click was inert.
+
+                Selecting yourself is excluded: the drawer offers a call button
+                that is disabled for your own account, so listing yourself here
+                is the other half of the same dead end. The filter also drops
+                duplicate entries, since presence arrives over the socket and the
+                same person can show up twice while a reconnect is in flight.
+              */
+              const isSelf = user.id === nexus.currentUser?.id;
+
+              if (isSelf) {
+                return (
+                  <div key={user.id} className="flex items-center gap-3">
+                    <Avatar name={user.name} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm text-foreground">
+                        {user.name} <span className="text-muted-foreground">(you)</span>
+                      </span>
+                      <span className="text-xs text-success">Online</span>
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => nexus.openUser(user)}
+                  className="flex w-full items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
                   <Avatar name={user.name} />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-foreground">{user.name}</span>
                     <span className="text-xs text-success">Online</span>
                   </span>
-                </div>
-              ))}
+                </button>
+              );
+            })}
+            {onlineUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nobody else is online right now. Teammates you have invited will appear here while
+                they are connected.
+              </p>
+            ) : null}
           </div>
         </Card>
       ) : null}

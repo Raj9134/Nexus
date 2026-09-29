@@ -552,4 +552,46 @@ describe("the brand mark", () => {
     // Browsers take the first icon they can render, so order decides which wins.
     expect(svgIndex).toBeLessThan(icoIndex);
   });
+
+  /*
+    The "Online users" panel on the messages page was a plain div per person.
+    It is titled by presence, it sits on the one screen you go to in order to
+    talk to somebody, and clicking a name did nothing at all. The drawer holding
+    the message and call buttons was reachable only from the team page, so the
+    obvious control was inert and the feature looked broken from the one place
+    it was supposed to work. It also listed the current user, whose call button
+    is disabled by definition, which made the only row on a fresh account a dead
+    end.
+
+    A dead control is invisible to tsc, to eslint, and to any test that does not
+    click it, which is why this shipped.
+  */
+  describe("the online users panel is reachable", () => {
+    const pages = readFileSync(join(SRC, "pages", "AppPages.tsx"), "utf8");
+    const panel = pages.slice(pages.indexOf("Online users"));
+
+    it("binds a click on each listed person to the drawer holding the actions", () => {
+      expect(panel).toMatch(/<button[\s\S]{0,400}onClick=\{\(\) => nexus\.openUser\(user\)\}/);
+    });
+
+    it("marks the current user instead of offering a disabled call", () => {
+      // The (you) label sits inside the isSelf branch, but the branch also
+      // carries the fallback markup, so the distance between them is wider than
+      // it looks. Both halves are checked instead of one span.
+      expect(panel).toMatch(/isSelf = user\.id === nexus\.currentUser\?\.id/);
+      expect(panel).toMatch(/\(you\)/);
+    });
+
+    it("explains an empty panel rather than showing a bare card", () => {
+      expect(panel).toMatch(/onlineUsers\.length === 0/);
+      expect(panel).toMatch(/Nobody else is online/);
+    });
+
+    it("deduplicates presence so a reconnect cannot produce a second dead row", () => {
+      // The socket appends on connect and the initial fetch also returns online
+      // members, so the same person can appear twice mid-reconnect.
+      expect(pages).toMatch(/const seen = new Set<string>\(\)/);
+      expect(pages).toMatch(/seen\.has\(user\.id\)/);
+    });
+  });
 });
