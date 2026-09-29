@@ -449,7 +449,19 @@ const forgotPassword = async (req, res) => {
     });
 
     if (!delivery.delivered) {
-        console.log(`[auth] password reset token for ${email}: ${token}`);
+        /*
+            The token is written to the log rather than returned, so an operator
+            with access to the host can complete a reset by hand when the
+            provider is unreachable -- which is exactly the situation on a host
+            that blocks outbound SMTP. It stays out of the response on purpose:
+            a token in the response would let anyone who knows an address reset
+            that account's password, and the endpoint answers identically whether
+            or not the address exists.
+        */
+        console.warn(
+            `[auth] password reset for ${email} could not be emailed ` +
+            `(${delivery.reason || "provider unavailable"}). Token for manual use: ${token}`
+        );
     }
 
     /*
@@ -550,7 +562,10 @@ const requestEmailVerification = async (req, res) => {
     });
 
     if (!delivery.delivered) {
-        console.log(`[auth] email verification token for ${email}: ${token}`);
+        console.warn(
+            `[auth] email verification for ${email} could not be emailed ` +
+            `(${delivery.reason || "provider unavailable"}). Token for manual use: ${token}`
+        );
     }
 
     /* Same reasoning as the password reset: the token is returned whenever the
