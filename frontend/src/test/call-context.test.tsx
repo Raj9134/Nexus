@@ -367,3 +367,32 @@ describe("call state", () => {
     expect(result.current.error).toBeTruthy();
   });
 });
+
+describe("socket errors", () => {
+  /*
+    Regression: every rejected socket action is reported as socketError,
+    including the channel joins a brand-new account used to make. The call
+    dialog rendered over the whole page for that message, so the invite and
+    onboarding screens could not be clicked.
+  */
+  it("ignores a channel rejection while no call is involved", async () => {
+    const { result } = renderCall();
+
+    await fire("socketError", { message: "You are not allowed to join this channel" });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.phase).toBe("idle");
+  });
+
+  it("still surfaces a rejection while a call is being placed", async () => {
+    const { result } = renderCall();
+
+    await act(async () => {
+      await result.current.startCall(PEER_ID, "Priya");
+    });
+
+    await fire("socketError", { message: "Not allowed to place this call" });
+
+    expect(result.current.error).toBe("Not allowed to place this call");
+  });
+});

@@ -1,5 +1,6 @@
 import { io, type Socket } from "socket.io-client";
 
+import { getAccessToken } from "@/services/api";
 import type { MessageItem, NotificationItem } from "@/types/nexus";
 
 const SOCKET_URL: string =
@@ -7,13 +8,7 @@ const SOCKET_URL: string =
   (import.meta.env["VITE_API_URL"] as string | undefined)?.replace(/\/api\/?$/, "") ??
   "http://localhost:5000";
 
-const readAccessToken = (): string | null => {
-  try {
-    return window.localStorage.getItem("nexus.accessToken");
-  } catch {
-    return null;
-  }
-};
+const readAccessToken = (): string | null => getAccessToken();
 
 let socket: Socket | null = null;
 
@@ -25,7 +20,20 @@ export const connectSocket = (): Socket | null => {
     return null;
   }
 
-  if (socket?.connected) {
+  /*
+    `connected` is not enough. Subscriptions are registered one after another
+    (channel, direct, notification, presence...), so the first few run while
+    the handshake is still in flight. Treating that as "no socket" tore the
+    connecting socket down on every subscription and left every listener
+    except the last one attached to a dead connection: the socket itself
+    looked healthy, but chat, calls and notifications never fired.
+
+    `active` stays true from the start of the handshake through a reconnect,
+    so the same instance is reused until it is explicitly disconnected.
+  */
+  const socketToken = (socket?.auth as { token?: string } | undefined)?.token;
+
+  if (socket?.active && socketToken === token) {
     return socket;
   }
 

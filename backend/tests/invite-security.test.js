@@ -115,6 +115,11 @@ const register = async (name, email, role) => {
     check("preview works without a session", preview.status, 200);
     check("preview names the workspace", preview.data.organization, `Invite Org ${stamp}`);
     check("preview hides the member list", preview.data.members, undefined);
+    check(
+        "preview says how many projects the link unlocks",
+        preview.data.projects,
+        1
+    );
 
     const badPreview = await call("GET", "/organizations/invitations/preview/deadbeef");
     check("unknown invitation preview", badPreview.status, 404);
@@ -145,6 +150,18 @@ const register = async (name, email, role) => {
     check(
         "the guest can now see the workspace",
         (guestOrgs.data.organizations || []).some((org) => org.id === orgId),
+        true
+    );
+
+    /*
+        Joining the workspace has to unlock its work, not just its name. This is
+        what the invitee's dashboard shows, so an invite that granted only
+        membership would leave them staring at an empty board.
+    */
+    const guestProjects = await call("GET", "/projects", guest.token);
+    check(
+        "the guest can see the workspace project",
+        (guestProjects.data.projects || []).some((project) => project.name === "Launch"),
         true
     );
 

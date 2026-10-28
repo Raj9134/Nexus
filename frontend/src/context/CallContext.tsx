@@ -413,6 +413,17 @@ export function CallProvider({ children }: { children: ReactNode }) {
     });
 
     const offError = onSocketEvent("socketError", ({ message }) => {
+      /*
+        The server sends this for any rejected socket action, not just calls.
+        A channel join it declines (a brand-new account has no workspace yet)
+        used to open the full-screen call dialog with that message, which made
+        the page underneath unclickable. Call failures only matter while a call
+        is actually being set up or is in progress.
+      */
+      if (phaseRef.current === "idle" || phaseRef.current === "ended") {
+        return;
+      }
+
       setError(message);
     });
 

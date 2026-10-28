@@ -1,4 +1,5 @@
 const Organization = require("../models/Organization");
+const Project = require("../models/Project");
 const User = require("../models/User");
 
 const emailService = require("../services/emailService");
@@ -218,13 +219,23 @@ const previewInvite = async (req, res) => {
 
     const inviter = await User.findById(invite.invitedBy).select("name");
 
+    /*
+        How much work is behind the link. A count only: the token is a bearer
+        credential, so naming projects would leak a private workspace's roadmap
+        to anyone who forwards the link.
+    */
+    const projects = organization
+        ? await Project.countDocuments({ organization: organization._id })
+        : 0;
+
     return res.status(200).json({
         organization: organization ? organization.name : "a NEXUS workspace",
         workspaceType: organization ? organization.workspaceType : "",
         role: invite.role,
         inviter: inviter ? inviter.name : "A teammate",
         email: invite.email,
-        expiresAt: invite.expiresAt
+        expiresAt: invite.expiresAt,
+        projects
     });
 };
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { api, isAuthenticated, type InvitePreview } from "@/services/api";
+import { useNexus } from "@/context/NexusContext";
 import {
   Avatar,
   Badge,
@@ -21,6 +22,7 @@ import {
  */
 export function AcceptInvitePage({ token }: { token: string }) {
   const navigate = useNavigate();
+  const nexus = useNexus();
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
@@ -58,7 +60,14 @@ export function AcceptInvitePage({ token }: { token: string }) {
     setError(null);
 
     try {
-      await api.invitations.accept(token);
+      const accepted = await api.invitations.accept(token);
+      /*
+        This page lives under the workspace provider, which hydrated before the
+        invitation was redeemed -- so its organizations/projects still describe
+        life before the join. Reload them here, focused on the workspace that
+        was just accepted, or the dashboard stays empty until a manual refresh.
+      */
+      await nexus.reload(accepted.organization?.id);
       await navigate({ to: "/app" });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "We could not accept this invitation.");
@@ -123,6 +132,14 @@ export function AcceptInvitePage({ token }: { token: string }) {
                     {preview.workspaceType || "Not set"}
                   </dd>
                 </div>
+                {typeof preview.projects === "number" ? (
+                  <div>
+                    <dt className="text-muted-foreground">You will get access to</dt>
+                    <dd className="mt-0.5 font-medium text-foreground">
+                      {preview.projects} {preview.projects === 1 ? "project" : "projects"}
+                    </dd>
+                  </div>
+                ) : null}
               </dl>
             </Card>
 

@@ -76,7 +76,12 @@ interface NexusState {
   /** False once the workspace has been hydrated from the API. */
   isDemo: boolean;
   isLoading: boolean;
-  reload: () => Promise<void>;
+  /**
+   * Rehydrate every panel. Pass a workspace id to focus it after loading, which
+   * is what the invite-accept flow needs: the provider was mounted before the
+   * join, so its organization list is stale by then.
+   */
+  reload: (preferredOrganizationId?: string) => Promise<void>;
   signOut: () => Promise<void>;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (value: boolean) => void;
@@ -206,15 +211,16 @@ export function NexusProvider({ children }: { children: ReactNode }) {
     [pushToast],
   );
 
-  const reload = useCallback(async () => {
-    if (!isAuthenticated()) {
-      setIsDemo(true);
-      return;
-    }
+  const reload = useCallback(
+    async (preferredOrganizationId?: string) => {
+      if (!isAuthenticated()) {
+        setIsDemo(true);
+        return;
+      }
 
-    setIsLoading(true);
+      setIsLoading(true);
 
-    /*
+      /*
       Every panel is settled on its own rather than through one Promise.all.
       A single unreachable endpoint used to reject the whole batch, so the
       catch below kept every seed value on screen: one flaky
@@ -222,92 +228,111 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       demo's 5. Settling each call independently means a failure degrades one
       panel instead of silently replacing the entire app with fake numbers.
     */
-    const settle = <T,>(label: string, call: Promise<T>, fallback: T): Promise<T> =>
-      call.catch((error: unknown) => {
-        failed.push(label);
-        console.warn(`NEXUS: ${label} failed to load`, error);
-        return fallback;
-      });
+      const failed: string[] = [];
 
-    const failed: string[] = [];
+      const settle = <T,>(label: string, call: Promise<T>, fallback: T): Promise<T> =>
+        call.catch((error: unknown) => {
+          failed.push(label);
+          console.warn(`NEXUS: ${label} failed to load`, error);
+          return fallback;
+        });
 
-    const [
-      me,
-      projectList,
-      taskList,
-      team,
-      channelList,
-      messageList,
-      notificationList,
-      fileList,
-      folderList,
-      eventList,
-      analyticsResult,
-      auditList,
-      orgList,
-    ] = await Promise.all([
-      // The identity call is the one thing that must not be faked: without it
-      // there is no session, and the caller already checked for a token.
-      api.auth.me(),
-      settle("projects", api.projects.list(), [] as Project[]),
-      settle("tasks", api.tasks.list(), [] as Task[]),
-      settle("team", api.team.list(), [] as User[]),
-      settle("channels", api.channels.list(), [] as string[]),
-      settle("messages", api.messages.list(), [] as MessageItem[]),
-      settle("notifications", api.notifications.list(), [] as NotificationItem[]),
-      settle("files", api.files.list(), [] as FileItem[]),
-      settle("folders", api.files.folders(), [] as string[]),
-      settle("calendar", api.calendar.list(), [] as CalendarEvent[]),
-      settle("analytics", api.analytics.get(), emptyAnalytics),
-      // Audit logs are admin-only, so a plain member gets a 403 here. That is
-      // an expected answer, not a broken API, and it must not take the rest
-      // of the workspace down with it.
-      api.audit.list().catch((error: unknown) => {
-        if (error instanceof ApiError && error.status === 403) {
-          return [] as AuditLog[];
-        }
-        throw error;
-      }),
-      settle("organizations", api.organizations.list(), [] as Organization[]),
-    ]);
+      /*
+        Identity comes first because it decides whether the admin-only panels
+        are requested at all. A plain member used to request the audit log on
+        every load and eat a guaranteed 403, which surfaced as red console
+        noise in an otherwise clean workspace.
+      */
+      const me = await api.auth.me();
 
-    if (failed.length > 0) {
-      pushToast(`Could not load ${failed.join(", ")}. Other areas are still live.`, "warning");
-    }
+      const [
+        projectList,
+        taskList,
+        team,
+        channelList,
+        messageList,
+        notificationList,
+        fileList,
+        folderList,
+        eventList,
+        analyticsResult,
+        auditList,
+        orgList,
+      ] = await Promise.all([
+        settle("projects", api.projects.list(), [] as Project[]),
+        settle("tasks", api.tasks.list(), [] as Task[]),
+        settle("team", api.team.list(), [] as User[]),
+        settle("channels", api.channels.list(), [] as string[]),
+        settle("messages", api.messages.list(), [] as MessageItem[]),
+        settle("notifications", api.notifications.list(), [] as NotificationItem[]),
+        settle("files", api.files.list(), [] as FileItem[]),
+        settle("folders", api.files.folders(), [] as string[]),
+        settle("calendar", api.calendar.list(), [] as CalendarEvent[]),
+        settle("analytics", api.analytics.get(), emptyAnalytics),
+        // The server only lets workspace owners read audit history, and the
+        // profile reports that same ownership, so ask only when it can answer.
+        me.role === "Organization Admin"
+          ? api.audit.list().catch((error: unknown) => {
+              if (error instanceof ApiError && error.status === 403) {
+                return [] as AuditLog[];
+              }
+              throw error;
+            })
+          : Promise.resolve([] as AuditLog[]),
+        settle("organizations", api.organizations.list(), [] as Organization[]),
+      ]);
 
-    setCurrentUser(me);
-    setProjects(projectList);
-    setTasks(taskList);
-    setUsers(team);
-    setChannels(channelList);
-    setMessages(messageList);
-    setNotifications(notificationList);
-    setFiles(fileList);
-    setFolders(folderList);
-    setEvents(eventList);
-    setAnalytics(analyticsResult);
-    setAuditLogs(auditList);
-
-    const primaryOrg = orgList[0];
-    setOrganization(primaryOrg ? primaryOrg.name : "NEXUS");
-    setOrganizationId((previous) => {
-      // Keep the user's choice across a reload, but never keep an id that is
-      // no longer one of theirs.
-      if (previous && orgList.some((org) => org.id === previous)) {
-        return previous;
+      if (failed.length > 0) {
+        pushToast(`Could not load ${failed.join(", ")}. Other areas are still live.`, "warning");
       }
 
-      return primaryOrg ? primaryOrg.id : null;
-    });
+      setCurrentUser(me);
+      setProjects(projectList);
+      setTasks(taskList);
+      setUsers(team);
+      setChannels(channelList);
+      setMessages(messageList);
+      setNotifications(notificationList);
+      setFiles(fileList);
+      setFolders(folderList);
+      setEvents(eventList);
+      setAnalytics(analyticsResult);
+      setAuditLogs(auditList);
 
-    setOrganizations(orgList);
-    /*
+      /*
+      A requested workspace wins (the invite flow has just joined it), then the
+      user's current choice, then the first workspace they belong to.
+    */
+      const requestedOrg = preferredOrganizationId
+        ? orgList.find((org) => org.id === preferredOrganizationId)
+        : undefined;
+      const primaryOrg = requestedOrg ?? orgList[0];
+
+      setOrganization(primaryOrg ? primaryOrg.name : "NEXUS");
+      setOrganizationId((previous) => {
+        if (requestedOrg) {
+          return requestedOrg.id;
+        }
+
+        // Keep the user's choice across a reload, but never keep an id that is
+        // no longer one of theirs.
+        if (previous && orgList.some((org) => org.id === previous)) {
+          return previous;
+        }
+
+        return primaryOrg ? primaryOrg.id : null;
+      });
+
+      setOrganizations(orgList);
+      /*
       Real data has landed, so this is no longer a demo even if some panels
       failed. Leaving it true is what made the seed values look authoritative.
     */
-    setIsDemo(false);
-    setIsLoading(false);
-  }, [pushToast]);
+      setIsDemo(false);
+      setIsLoading(false);
+    },
+    [pushToast],
+  );
 
   useEffect(() => {
     void reload();

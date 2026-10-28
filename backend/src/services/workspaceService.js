@@ -399,7 +399,13 @@ const listChannels = async (user) => {
     const organizationIds = await accessibleOrganizationIds(user);
 
     if (!organizationIds.length) {
-        return DEFAULT_CHANNELS;
+        /*
+            No workspace yet. Listing the default names here used to make every
+            new account join rooms the server then refused, because channel
+            access requires an organization. The rejection arrived as a socket
+            error and covered the page with the call dialog.
+        */
+        return [];
     }
 
     const channels = await Channel.find({ organization: { $in: organizationIds } })

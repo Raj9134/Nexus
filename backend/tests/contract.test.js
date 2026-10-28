@@ -191,6 +191,16 @@ const report = () => {
     check("no token rejected", (await call("GET", "/tasks", null)).status, 401);
     check("garbage token rejected", (await call("GET", "/tasks", "not.a.jwt")).status, 401);
 
+    // A brand-new account belongs to no workspace, so there is no channel it
+    // could join. Returning the default names anyway made the client subscribe
+    // to rooms the socket server then rejected.
+    const noOrgChannels = await call("GET", "/channels", outsiderToken);
+    check(
+        "a user with no workspace has no channels",
+        Array.isArray(noOrgChannels.data.channels) && noOrgChannels.data.channels.length === 0,
+        true
+    );
+
     const me = await call("GET", "/auth/me", token);
     check("GET /auth/me", me.status, 200);
     shape("GET /auth/me User contract", me.data.user, USER);

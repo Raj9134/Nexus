@@ -240,6 +240,27 @@ describe("NexusProvider hydration", () => {
     expect(result.current.auditLogs).toEqual([]);
   });
 
+  it("does not request audit logs at all for a plain member", async () => {
+    signIn();
+
+    const calls = mockApi({
+      "/api/auth/me": { body: { user: { ...REAL_USER, role: "Member" } } },
+      "/api/projects": { body: { projects: [] } },
+      "/api/tasks": { body: { tasks: [] } },
+      "/api/team": { body: { users: [{ ...REAL_USER, role: "Member" }] } },
+      "/api/analytics": { body: { analytics: EMPTY_ANALYTICS } },
+    });
+
+    const { result } = renderNexus();
+
+    await waitForHook(() => expect(result.current.isDemo).toBe(false));
+
+    expect(result.current.auditLogs).toEqual([]);
+    // A guaranteed 403 on every load is not an error state, but it does show
+    // up as a red failure in the browser console, so it is not worth asking.
+    expect(calls.some((url) => url.includes("/api/audit-logs"))).toBe(false);
+  });
+
   it("derives the role list from the loaded team, not a fixed catalogue", async () => {
     signIn();
 

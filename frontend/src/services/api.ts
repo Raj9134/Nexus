@@ -409,6 +409,8 @@ export interface InvitePreview {
   inviter: string;
   email: string;
   expiresAt: string;
+  /** How much work is waiting behind the link. Count only, never project names. */
+  projects?: number;
 }
 
 export interface InviteSendResult {
@@ -492,6 +494,14 @@ export const api = {
         body: input,
         anonymous: true,
       });
+
+      /*
+        A reset retires every session on the server, so the tokens this browser
+        is still holding are already dead. Dropping them here makes the login
+        page render straight away instead of bouncing through /app, failing
+        /auth/me, and coming back.
+      */
+      clearTokens();
     },
 
     async requestEmailVerification(
@@ -625,13 +635,19 @@ export const api = {
       return payload;
     },
 
-    async accept(token: string): Promise<{ message?: string; role?: string }> {
+    async accept(token: string): Promise<{
+      message?: string;
+      role?: string;
+      /** The workspace that was just joined, so the caller can focus it. */
+      organization?: { id: string; name: string };
+    }> {
       // Not anonymous: redeeming an invitation needs a session, and the token
       // has to be the one belonging to the invited address.
-      const payload = await request<{ message?: string; role?: string }>(
-        "/organizations/invitations/accept",
-        { method: "POST", body: { token } },
-      );
+      const payload = await request<{
+        message?: string;
+        role?: string;
+        organization?: { id: string; name: string };
+      }>("/organizations/invitations/accept", { method: "POST", body: { token } });
 
       return payload ?? {};
     },
@@ -1282,6 +1298,15 @@ export const api = {
 };
 
 export const isAuthenticated = (): boolean => readStorage(ACCESS_TOKEN_KEY) !== null;
+
+/**
+ * The access token from whichever store currently holds the session.
+ *
+ * Realtime used to read localStorage directly, so a user who left "Remember
+ * me" unticked (sessionStorage) had no socket at all: chat, presence and
+ * notifications silently never arrived.
+ */
+export const getAccessToken = (): string | null => readStorage(ACCESS_TOKEN_KEY);
 
 /**
  * Dispatched after a successful login/register so the mounted NexusProvider

@@ -89,13 +89,18 @@ export function DashboardPage() {
     void nexus.reload();
   };
   const metrics = nexus.analytics.metrics;
+  // Greet the signed-in person, not a hardcoded name, and pick the greeting
+  // from the clock so it reads correctly at any hour.
+  const firstName = (nexus.currentUser?.name ?? "").trim().split(/\s+/)[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   return (
     <AppShell title="Overview">
       {/* The class is only a hook: the stylesheet pulls the HUD back on any page
           containing it, so nothing here has to know the backdrop exists. */}
       <div className="nexus-dashboard space-y-6">
         <SectionHeader
-          title="Good evening, Raj 👋"
+          title={firstName ? `${greeting}, ${firstName} 👋` : `${greeting} 👋`}
           description="Here's what's happening across your workspace."
           actions={
             <>

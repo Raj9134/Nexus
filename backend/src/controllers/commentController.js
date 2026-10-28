@@ -3,6 +3,8 @@ const User = require("../models/User");
 
 const { serializeComment } = require("../utils/serialize");
 
+const { resolveTaskId } = require("./taskController");
+
 const {
     isValidObjectId,
     checkTaskAccess,
@@ -99,8 +101,16 @@ const createComment = async (req, res) => {
         });
     }
 
+    const taskId = await resolveTaskId(req.body.taskId);
+
+    if (!taskId) {
+        return res.status(404).json({
+            message: "Task not found"
+        });
+    }
+
     const access = await checkTaskAccess(
-        req.body.taskId,
+        taskId,
         req.userId
     );
 
@@ -143,8 +153,16 @@ const createComment = async (req, res) => {
 
 const getComments = async (req, res) => {
 
+    const taskId = await resolveTaskId(req.params.taskId);
+
+    if (!taskId) {
+        return res.status(404).json({
+            message: "Task not found"
+        });
+    }
+
     const access = await checkTaskAccess(
-        req.params.taskId,
+        taskId,
         req.userId
     );
 

@@ -314,7 +314,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               {devToken ? (
                 <div className="rounded-md border border-border bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
                   <p className="font-medium text-foreground">
-                    No mail provider is configured in this environment, so the token is shown here:
+                    Email delivery is unavailable in this environment, so the token is shown here:
                   </p>
                   <p className="mt-1 break-all font-mono">{devToken}</p>
                   <Button

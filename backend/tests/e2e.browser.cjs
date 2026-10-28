@@ -154,10 +154,18 @@ const postJson = async (path, body) => {
     await page.waitForTimeout(1200);
     await page.getByLabel(/email/i).first().fill(email);
     await page.getByRole("button", { name: /send reset link/i }).click();
-    await page.waitForTimeout(2500);
 
-    const devTokenVisible = await page.getByText(/no mail provider/i).count();
-    check("dev token is surfaced without a mail provider", devTokenVisible > 0);
+    /*
+      With a provider configured the request waits for its answer, and a
+      rejected send (the usual case for a .test address) takes a few seconds
+      before the response carries the fallback token. Counting straight away
+      made this check depend on how fast the mail provider failed.
+    */
+    const devTokenNotice = page.getByText(/email delivery is unavailable/i).first();
+    await devTokenNotice.waitFor({ state: "visible", timeout: 20000 }).catch(() => null);
+
+    const devTokenVisible = await devTokenNotice.count();
+    check("dev token is surfaced when delivery fails", devTokenVisible > 0);
 
     if (devTokenVisible > 0) {
         await page.getByRole("button", { name: /continue with this token/i }).click();
@@ -173,7 +181,7 @@ const postJson = async (path, body) => {
             check("reset page pre-fills the token", (await tokenField.inputValue()).length > 0, (await tokenField.inputValue()).slice(0, 12) + "...");
         }
 
-    const pw = page.locator('input[type=password], input[type=text]');
+    const pw = page.locator('input[type=password]');
     const pwCount = await pw.count();
     for (let i = 0; i < pwCount; i += 1) {
       await pw.nth(i).fill("rotated-password-456");
@@ -182,8 +190,8 @@ const postJson = async (path, body) => {
     await page.waitForTimeout(3000);
     const afterReset = await page.locator("body").innerText();
     check(
-      "reset completes and lands somewhere valid",
-      /\/app/.test(page.url()) || /reset|sign in|updated|success/i.test(afterReset),
+      "reset completes and lands on sign-in",
+      /password updated/i.test(afterReset) || /\/login/.test(page.url()),
       page.url().replace(APP, ""),
     );
 
@@ -210,7 +218,10 @@ const postJson = async (path, body) => {
 
     try {
         const orgs = await page.evaluate(async () => {
-            const token = window.localStorage.getItem("nexus.accessToken");
+            // "Remember me" decides the store, so a session can live in either.
+            const token =
+                window.localStorage.getItem("nexus.accessToken") ||
+                window.sessionStorage.getItem("nexus.accessToken");
             const res = await fetch("http://127.0.0.1:5000/api/organizations/mine", {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -221,7 +232,9 @@ const postJson = async (path, body) => {
         if (orgId) {
             const issued = await page.evaluate(
                 async ([id, invitee]) => {
-                    const token = window.localStorage.getItem("nexus.accessToken");
+                    const token =
+                        window.localStorage.getItem("nexus.accessToken") ||
+                        window.sessionStorage.getItem("nexus.accessToken");
                     const res = await fetch(`http://127.0.0.1:5000/api/organizations/${id}/invitations`, {
                         method: "POST",
                         headers: {
@@ -258,8 +271,11 @@ const postJson = async (path, body) => {
         await page.goto(`${APP}/app`, { waitUntil: "domcontentloaded" });
         await page.waitForTimeout(1500);
         await page.evaluate(() => {
-            window.localStorage.removeItem("nexus.accessToken");
-            window.localStorage.removeItem("nexus.refreshToken");
+            // A fresh visitor has no session in either store.
+            for (const store of [window.localStorage, window.sessionStorage]) {
+                store.removeItem("nexus.accessToken");
+                store.removeItem("nexus.refreshToken");
+            }
         });
 
         await page.goto(`${APP}/login`, { waitUntil: "domcontentloaded" });
@@ -284,6 +300,18 @@ const postJson = async (path, body) => {
             await accept.click();
             await page.waitForURL(/\/app/, { timeout: 20000 }).catch(() => null);
             check("accepting the invitation lands in the app", /\/app/.test(page.url()), page.url());
+
+            /*
+                Regression: the workspace provider hydrates before the invitation
+                is redeemed, so without an explicit reload the invitee landed on
+                an empty dashboard and only saw the workspace after refreshing.
+            */
+            const joinedBody = await page.locator("body").innerText();
+            check(
+                "the joined workspace appears without a manual reload",
+                /NEXUS Labs/i.test(joinedBody),
+                joinedBody.slice(0, 140).replace(/\s+/g, " "),
+            );
         }
 
         // The same link must not work twice.
